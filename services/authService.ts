@@ -1,6 +1,6 @@
 import { User, Script } from "../types";
 
-// Mock database keys
+// Keys for local storage
 const USERS_KEY = 'skena_users';
 const CURRENT_USER_KEY = 'skena_current_user';
 const SCRIPTS_KEY = 'skena_all_scripts';
@@ -23,6 +23,7 @@ export const authService = {
 
     users.push(newUser);
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(newUser)); // Auto login
     return newUser;
   },
 
@@ -51,18 +52,16 @@ export const authService = {
 
   // Save scripts associated with user
   saveScripts: (userId: string, scripts: Script[]) => {
-    // We store ALL scripts in one big array in LS for this demo, 
-    // filtering by ownerId when retrieving.
     const allScriptsStr = localStorage.getItem(SCRIPTS_KEY);
     let allScripts: Script[] = allScriptsStr ? JSON.parse(allScriptsStr) : [];
     
-    // Remove old versions of this user's scripts
-    allScripts = allScripts.filter(s => s.ownerId !== userId);
+    // Remove old versions of this user's scripts (simple replacement strategy)
+    // We filter out scripts that belong to this user from the main storage
+    // Then append the current state of the user's scripts
+    const otherScripts = allScripts.filter(s => s.ownerId !== userId);
+    const updatedStore = [...otherScripts, ...scripts];
     
-    // Add new versions
-    allScripts = [...allScripts, ...scripts];
-    
-    localStorage.setItem(SCRIPTS_KEY, JSON.stringify(allScripts));
+    localStorage.setItem(SCRIPTS_KEY, JSON.stringify(updatedStore));
   },
 
   getScripts: (userId: string): Script[] => {

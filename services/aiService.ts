@@ -7,19 +7,17 @@ const IMAGE_MODEL = 'gemini-2.5-flash-image';
 
 // --- Helper to get Client ---
 const getClient = (settings?: AppSettings) => {
+    // Prioritize User API Key -> Then Process Env
     const apiKey = settings?.apiKey || process.env.API_KEY;
-    if (!apiKey) throw new Error("API Key is missing. Please configure it in Settings.");
+    if (!apiKey) throw new Error("No API Key");
     
-    // Note: The @google/genai SDK constructor options are strict. 
-    // If a baseUrl is needed (for proxies), it often needs to be handled via custom fetch or specific SDK options if supported.
-    // For this implementation, we stick to standard initialization but allow the key to be dynamic.
     return new GoogleGenAI({ apiKey });
 };
 
 // --- Retry Helper ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelay = 1000): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
@@ -27,11 +25,10 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000)
       error?.status === 429 || 
       error?.code === 429 || 
       error?.message?.includes('429') || 
-      error?.message?.includes('quota') ||
-      error?.toString().includes('429');
+      error?.message?.includes('quota');
 
     if (isRateLimit && retries > 0) {
-      console.warn(`Rate limit hit. Retrying in ${baseDelay}ms... (${retries} attempts left)`);
+      console.warn(`Rate limit hit. Retrying in ${baseDelay}ms...`);
       await wait(baseDelay);
       return withRetry(fn, retries - 1, baseDelay * 2);
     }
@@ -40,7 +37,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, baseDelay = 2000)
 }
 
 /**
- * Generates the initial script structure (Title, Premise, Characters) from a user prompt.
+ * Generates the initial script structure with richer plots.
  */
 export const generateScriptBlueprint = async (prompt: string, lang: Language = 'zh-CN', settings?: AppSettings): Promise<Partial<Script>> => {
   return withRetry(async () => {
@@ -50,14 +47,11 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
     const systemInstruction = `
       You are a master storyteller, dramatist, and screenwriter.
       Your goal is to create DEEP, COMPLEX, and EMOTIONALLY RESONANT narratives.
-      Avoid clichés. Avoid shallow characters.
       
-      Task: Expand the user's idea into a rich dramatic setup.
-      1. Title: Creative and evocative.
-      2. Premise: High stakes, clear conflict, interesting hook.
-      3. Setting: Atmospheric and specific.
-      4. Plot Points: Provide 3 twists or major events that escalate tension.
-      5. Characters: Create 2-5 characters with conflicting goals, hidden secrets, or strong chemistry.
+      Instructions:
+      1. Create high stakes and strong conflict.
+      2. Ensure characters have secrets and conflicting goals.
+      3. Plot points must be dramatic twists, not just events.
       
       ${langInstruction}
     `;
@@ -73,16 +67,16 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
           properties: {
             title: { type: Type.STRING },
             premise: { type: Type.STRING },
-            setting: { type: Type.STRING, description: "Where the scene takes place" },
+            setting: { type: Type.STRING, description: "Detailed visual setting" },
             plotPoints: { 
               type: Type.ARRAY, 
               items: { type: Type.STRING },
-              description: "3 key events that should happen, including twists"
+              description: "3-5 key events including a major twist"
             },
             possibleEndings: { 
               type: Type.ARRAY, 
               items: { type: Type.STRING },
-              description: "2 distinct ways the story could end (Tragedy/Comedy/Open)"
+              description: "2 distinct endings"
             },
             characters: {
               type: Type.ARRAY,
@@ -90,10 +84,10 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
                 type: Type.OBJECT,
                 properties: {
                   name: { type: Type.STRING },
-                  role: { type: Type.STRING, description: "Their job or archetype, e.g. Commander, Spy" },
-                  personality: { type: Type.STRING, description: "Complex traits, inner motivations, flaws" },
-                  speakingStyle: { type: Type.STRING, description: "Distinct voice. e.g. 'Formal and cold', 'Uses lot of slang', 'Stutters when nervous'" },
-                  visualDescription: { type: Type.STRING, description: "Detailed physical appearance for image generation" },
+                  role: { type: Type.STRING },
+                  personality: { type: Type.STRING, description: "Complex traits & motivations" },
+                  speakingStyle: { type: Type.STRING, description: "Distinct voice patterns" },
+                  visualDescription: { type: Type.STRING, description: "Detailed physical appearance" },
                 },
                 required: ["name", "role", "personality", "speakingStyle", "visualDescription"]
               }
@@ -108,7 +102,6 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
     
     const data = JSON.parse(response.text);
     
-    // Transform to our internal type
     return {
       title: data.title,
       premise: data.premise,
@@ -131,7 +124,7 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
 };
 
 /**
- * Refines or autocompletes text based on context.
+ * Refines text.
  */
 export const refineText = async (
   currentText: string, 
@@ -145,20 +138,11 @@ export const refineText = async (
     const langInstruction = lang === 'zh-CN' ? "Respond in Simplified Chinese." : "Respond in English.";
     
     const prompt = `
-      Context:
-      Script Title: ${scriptContext.title}
-      Premise: ${scriptContext.premise}
-      
-      Task:
-      The user is writing the field: "${fieldType}".
-      Current text content: "${currentText}"
-
-      If the text is empty, generate a creative suggestion suitable for this script.
-      If the text is partial, complete it.
-      If the text is complete but short, expand and improve it to be more dramatic and professional.
-      
+      Context: ${scriptContext.title}. ${scriptContext.premise}
+      Task: Improve the following "${fieldType}" text. Make it more dramatic, concise, and evocative.
+      Text: "${currentText}"
       ${langInstruction}
-      Return ONLY the refined text, no explanations.
+      Return ONLY the refined text.
     `;
 
     const response = await ai.models.generateContent({
@@ -183,57 +167,61 @@ export const generateNextBeat = async (
     const ai = getClient(settings);
     const langInstruction = lang === 'zh-CN' ? "Respond in Simplified Chinese." : "Respond in English.";
     
-    // Last 15 messages to capture enough context including director notes
-    const recentHistory = script.history.slice(-15);
+    // Context window
+    const recentHistory = script.history.slice(-20);
     const historyText = recentHistory.map(m => {
-      const charName = script.characters.find(c => c.id === m.characterId)?.name || "Narrator/Director";
+      const charName = script.characters.find(c => c.id === m.characterId)?.name || "Narrator";
       return `${charName} [${m.type.toUpperCase()}]: ${m.content}`;
     }).join("\n");
 
     const characterProfiles = script.characters.map(c => 
-      `- Name: ${c.name} (${c.role})\n  Personality: ${c.personality}\n  Speaking Style: ${c.speakingStyle}`
-    ).join("\n\n");
+      `- ${c.name} (${c.role}): ${c.personality}. Style: ${c.speakingStyle}`
+    ).join("\n");
 
     let promptContext = "";
     
+    // CRITICAL: God Mode / Director Override Logic
     if (forcedDirectorCommand) {
         promptContext = `
-        IMPORTANT: The Director (User/God) has just issued a SPECIFIC COMMAND: "${forcedDirectorCommand}".
+        🚨 URGENT DIRECTOR OVERRIDE 🚨
+        The Director (User) has issued a command: "${forcedDirectorCommand}".
         
-        Your ONLY task is to make the characters or world react to this command immediately.
-        Do not ignore it. Do not continue previous conversations.
-        If the command describes an event (e.g. "It rains"), describe the rain (Narration) or have a character react to the rain.
-        If the command changes the plot, pivot the story instantly.
+        YOU MUST EXECUTE THIS COMMAND IMMEDIATELY in this turn.
+        - If it's an event (e.g. "An explosion happens"), use 'Narrator' to describe it vividly.
+        - If it's a character instruction (e.g. "John gets angry"), have John speak or act angrily.
+        - IGNORE previous conversation flow if necessary to satisfy the command.
         `;
     } else {
         promptContext = `
-        Continue the story naturally.
-        Maintain tension and character voice.
+        Continue the story naturally. 
+        Focus on conflict, emotion, and character chemistry. 
+        Keep dialogue sharp. Avoid repetitive greetings.
+        If the scene is stale, introduce a minor twist from the plot points.
         `;
     }
 
     const prompt = `
-      Current Setting: ${script.setting}
-      Premise: ${script.premise}
-      Key Plot Points: ${script.plotPoints?.join("; ")}
+      Title: ${script.title}
+      Setting: ${script.setting}
+      Plot Points: ${script.plotPoints?.join("; ")}
       
-      Character Profiles:
+      Characters:
       ${characterProfiles}
 
-      Recent Transcript:
+      Transcript:
       ${historyText}
 
       ${promptContext}
 
-      Task:
-      Generate the next single beat of the story. 
-      1. Choose which character speaks or acts next. 
-      2. Provide their dialogue or action.
-      3. Mimic the character's "Speaking Style" perfectly.
-      4. If the scene needs direction, description, or time passing, use "Narrator".
-      
+      Task: Generate the next beat.
       ${langInstruction}
-      Return JSON.
+      
+      Return JSON:
+      {
+        "characterName": "Name or 'Narrator'",
+        "type": "dialogue" | "action" | "narration",
+        "content": "The text"
+      }
     `;
 
     const response = await ai.models.generateContent({
@@ -244,7 +232,7 @@ export const generateNextBeat = async (
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            characterName: { type: Type.STRING, description: "Exact name of the character, or 'Narrator'" },
+            characterName: { type: Type.STRING },
             type: { type: Type.STRING, enum: ["dialogue", "action", "narration"] },
             content: { type: Type.STRING }
           },
@@ -256,7 +244,6 @@ export const generateNextBeat = async (
     if (!response.text) throw new Error("Failed to generate beat");
     const data = JSON.parse(response.text);
 
-    // Map back to ID
     let charId = 'narrator';
     if (data.characterName !== 'Narrator') {
       const char = script.characters.find(c => c.name === data.characterName);
@@ -272,65 +259,49 @@ export const generateNextBeat = async (
 };
 
 /**
- * Generates an avatar image for a character.
+ * Generates an avatar.
  */
-export const generateAvatarImage = async (character: Character, settings?: AppSettings, style: string = "cinematic, detailed portrait"): Promise<string> => {
+export const generateAvatarImage = async (character: Character, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
     const ai = getClient(settings);
-    const prompt = `${style} of ${character.visualDescription}, character named ${character.name}, ${character.role}. High quality, 4k, photorealistic style.`;
+    const prompt = `Cinematic portrait of ${character.name}, ${character.role}. ${character.visualDescription}. High detail, 8k, dramatic lighting.`;
     
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
-      contents: {
-        parts: [
-          { text: prompt }
-        ]
-      }
+      contents: { parts: [{ text: prompt }] }
     });
 
-    const candidates = response.candidates;
-    if (!candidates || candidates.length === 0) throw new Error("No image generated");
-
-    const parts = candidates[0].content?.parts;
-    if (!parts) throw new Error("No content parts in response");
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (!parts) throw new Error("No image generated");
 
     for (const part of parts) {
-      if (part.inlineData && part.inlineData.data) {
+      if (part.inlineData?.data) {
         return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
     }
-    
-    throw new Error("Unexpected response format for image generation");
+    throw new Error("No image data found");
   });
 };
 
 /**
- * Generates a scene illustration based on narration text.
+ * Generates a scene illustration.
  */
 export const generateSceneImage = async (sceneDescription: string, scriptTitle: string, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
     const ai = getClient(settings);
-    // Truncate if too long to save tokens
-    const desc = sceneDescription.length > 300 ? sceneDescription.substring(0, 300) : sceneDescription;
-    const prompt = `Cinematic movie still, wide shot. Context: ${scriptTitle}. Scene description: ${desc}. Highly detailed, 4k, atmospheric lighting, movie aesthetics.`;
+    const desc = sceneDescription.length > 400 ? sceneDescription.substring(0, 400) : sceneDescription;
+    const prompt = `Movie concept art, wide shot. Story: ${scriptTitle}. Scene: ${desc}. Masterpiece, 4k, atmospheric, detailed.`;
 
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
-      contents: {
-        parts: [
-          { text: prompt }
-        ]
-      }
+      contents: { parts: [{ text: prompt }] }
     });
 
-    const candidates = response.candidates;
-    if (!candidates || candidates.length === 0) throw new Error("No image generated");
-
-    const parts = candidates[0].content?.parts;
-    if (!parts) throw new Error("No content parts in response");
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (!parts) throw new Error("No image generated");
 
     for (const part of parts) {
-      if (part.inlineData && part.inlineData.data) {
+      if (part.inlineData?.data) {
         return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
     }

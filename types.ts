@@ -16,17 +16,17 @@ export interface User {
 
 export interface AppSettings {
   apiKey?: string;
-  baseUrl?: string; // For proxy users
+  baseUrl?: string; 
 }
 
 export interface Character {
   id: string;
   name: string;
-  role: string; // e.g., "The Hero", "The Villain"
-  personality: string; // Psychological traits
-  speakingStyle: string; // New: How they talk (e.g., "Shouts, uses slang", "Formal, poetic")
+  role: string;
+  personality: string;
+  speakingStyle: string;
   visualDescription: string;
-  avatarUrl?: string; // Base64 or URL
+  avatarUrl?: string; 
   isUserControlled: boolean;
 }
 
@@ -45,8 +45,8 @@ export interface Script {
   title: string;
   premise: string;
   setting: string;
-  plotPoints: string[]; // Key plot nodes
-  possibleEndings: string[]; // Potential endings
+  plotPoints: string[]; 
+  possibleEndings: string[]; 
   characters: Character[];
   history: Message[];
   lastUpdated: number;
@@ -65,7 +65,7 @@ export interface Achievement {
   id: string;
   title: string;
   description: string;
-  icon: string; // Emoji or icon name
+  icon: string; 
   conditionType: 'SCRIPT_COUNT' | 'MESSAGE_COUNT' | 'CHAR_CONTROL' | 'TEMPLATE_CREATE';
   threshold: number;
   unlocked: boolean;

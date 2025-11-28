@@ -45,20 +45,21 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
     const langInstruction = lang === 'zh-CN' ? "Respond entirely in Simplified Chinese." : "Respond in English.";
     
     const systemInstruction = `
-      You are a master storyteller, dramatist, and screenwriter.
-      Your goal is to create DEEP, COMPLEX, and EMOTIONALLY RESONANT narratives.
+      You are a world-class screenwriter and dramatist.
+      Your goal is to create a DEEP, COHERENT, and EMOTIONALLY GRIPPING script scenario.
       
-      Instructions:
-      1. Create high stakes and strong conflict.
-      2. Ensure characters have secrets and conflicting goals.
-      3. Plot points must be dramatic twists, not just events.
+      CORE GUIDELINES:
+      1. **Causal Fluency**: Plot points must follow a logical cause-and-effect chain. Avoid random events. Event A must lead to Event B.
+      2. **Character Contrast**: Characters must be foils to each other. They should have conflicting philosophies or goals to drive natural tension.
+      3. **Vivid Setting**: The setting should interact with the plot, not just be a background.
+      4. **Specific Voices**: Define specific speaking styles (e.g., "Short, punchy sentences", "Uses flowery metaphors", "Stutters when nervous").
       
       ${langInstruction}
     `;
 
     const response = await ai.models.generateContent({
       model: TEXT_MODEL,
-      contents: `Create a script scenario based on this idea: "${prompt}"`,
+      contents: `Create a script scenario based on this idea: "${prompt}". Make it dramatic and fluid.`,
       config: {
         systemInstruction,
         responseMimeType: "application/json",
@@ -71,12 +72,12 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
             plotPoints: { 
               type: Type.ARRAY, 
               items: { type: Type.STRING },
-              description: "3-5 key events including a major twist"
+              description: "5 key chronological events representing the story arc"
             },
             possibleEndings: { 
               type: Type.ARRAY, 
               items: { type: Type.STRING },
-              description: "2 distinct endings"
+              description: "2 distinct emotional endings"
             },
             characters: {
               type: Type.ARRAY,
@@ -85,8 +86,8 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
                 properties: {
                   name: { type: Type.STRING },
                   role: { type: Type.STRING },
-                  personality: { type: Type.STRING, description: "Complex traits & motivations" },
-                  speakingStyle: { type: Type.STRING, description: "Distinct voice patterns" },
+                  personality: { type: Type.STRING, description: "Deep psychological traits & motivations" },
+                  speakingStyle: { type: Type.STRING, description: "Distinct verbal tics, vocabulary level, or rhythm" },
                   visualDescription: { type: Type.STRING, description: "Detailed physical appearance" },
                 },
                 required: ["name", "role", "personality", "speakingStyle", "visualDescription"]
@@ -175,52 +176,62 @@ export const generateNextBeat = async (
     }).join("\n");
 
     const characterProfiles = script.characters.map(c => 
-      `- ${c.name} (${c.role}): ${c.personality}. Style: ${c.speakingStyle}`
+      `### ${c.name} (${c.role})
+       - Personality: ${c.personality}
+       - Speaking Style (MUST MIMIC): ${c.speakingStyle}`
     ).join("\n");
 
     let promptContext = "";
     
-    // CRITICAL: God Mode / Director Override Logic
+    // CRITICAL: God Mode / Director Override Logic - Improved for Natural Flow
     if (forcedDirectorCommand) {
         promptContext = `
-        🚨 URGENT DIRECTOR OVERRIDE 🚨
-        The Director (User) has issued a command: "${forcedDirectorCommand}".
+        🚨 **DIRECTOR INTERVENTION (GOD MODE)** 🚨
+        The Director has injected a specific event or command: "${forcedDirectorCommand}".
         
-        YOU MUST EXECUTE THIS COMMAND IMMEDIATELY in this turn.
-        - If it's an event (e.g. "An explosion happens"), use 'Narrator' to describe it vividly.
-        - If it's a character instruction (e.g. "John gets angry"), have John speak or act angrily.
-        - IGNORE previous conversation flow if necessary to satisfy the command.
+        **CRITICAL INSTRUCTION**: 
+        Do NOT just paste this event blindly. You must **weave it into the narrative flow**.
+        1. If it's an action event, describe it vividly via the Narrator.
+        2. If it's a character instruction, justify it internally (e.g., a sudden realization, a hidden motive revealed).
+        3. The characters must react to this new reality *immediately* and *in-character*.
+        
+        Make it feel like a shocking plot twist or a natural evolution, not a glitch.
         `;
     } else {
         promptContext = `
-        Continue the story naturally. 
-        Focus on conflict, emotion, and character chemistry. 
-        Keep dialogue sharp. Avoid repetitive greetings.
-        If the scene is stale, introduce a minor twist from the plot points.
+        **NARRATIVE FLOW INSTRUCTIONS**:
+        1. **Pacing**: Analyze the previous beat. If it was intense, maybe this beat is a reaction. If it was quiet, introduce tension.
+        2. **Subtext**: Characters should rarely say exactly what they mean. Use subtext.
+        3. **Plot Progression**: Gently nudge the story towards the next Plot Point: "${script.plotPoints.find(p => !historyText.includes(p)) || 'Climax'}".
+        
+        **CHARACTER STRICTNESS**:
+        - You MUST strictly adhere to 'Speaking Style'. 
+        - If a character is rude, they must NOT be polite.
+        - If a character is shy, they might stutter or use fragments.
+        - DO NOT sound like a generic AI assistant.
         `;
     }
 
     const prompt = `
       Title: ${script.title}
       Setting: ${script.setting}
-      Plot Points: ${script.plotPoints?.join("; ")}
       
-      Characters:
+      Characters & Profiles:
       ${characterProfiles}
 
-      Transcript:
+      Recent Transcript:
       ${historyText}
 
       ${promptContext}
 
-      Task: Generate the next beat.
+      Task: Generate the NEXT single beat (Dialogue, Action, or Narration).
       ${langInstruction}
       
       Return JSON:
       {
         "characterName": "Name or 'Narrator'",
         "type": "dialogue" | "action" | "narration",
-        "content": "The text"
+        "content": "The text content. If dialogue, do not include the name prefix."
       }
     `;
 

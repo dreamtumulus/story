@@ -4,15 +4,54 @@ import { Script, Character, Message, Language, AppSettings } from "../types";
 
 const TEXT_MODEL = 'gemini-2.5-flash';
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
+const DEFAULT_GEMINI_KEY = 'AIzaSyC6zQSEAAdLRgOMR6_CwQ1sSNVur0_vpW0';
 
-// --- Helper to get Client ---
+// --- Helper to get Effective Gemini Key ---
+const getGeminiKey = (settings?: AppSettings) => {
+    return settings?.apiKey || process.env.API_KEY || DEFAULT_GEMINI_KEY;
+};
+
+// --- Helper to get Client (Gemini) ---
 const getClient = (settings?: AppSettings) => {
-    // Prioritize User API Key -> Then Process Env
-    const apiKey = settings?.apiKey || process.env.API_KEY;
+    const apiKey = getGeminiKey(settings);
     if (!apiKey) throw new Error("No API Key");
-    
     return new GoogleGenAI({ apiKey });
 };
+
+// --- OpenRouter Fetch Helper ---
+async function callOpenRouter(
+    settings: AppSettings | undefined,
+    messages: { role: string, content: string }[],
+    jsonMode = false
+): Promise<any> {
+    const key = settings?.openRouterKey;
+    if (!key) throw new Error("OpenRouter API Key missing");
+    
+    const model = settings?.openRouterModel || 'google/gemini-2.0-flash-lite-preview-02-05:free';
+    
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${key}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": window.location.origin,
+            "X-Title": "Daydreaming App"
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: messages,
+            response_format: jsonMode ? { type: "json_object" } : undefined
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`OpenRouter Error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || "";
+    return jsonMode ? safeJsonParse(content, {}) : content;
+}
 
 // --- Retry Helper ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -37,29 +76,67 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelay = 1000)
 }
 
 /**
+ * Robust JSON Parser to prevent crashes (Black Screen Fix)
+ */
+const safeJsonParse = <T>(text: string, fallback: T): T => {
+  if (!text) return fallback;
+  try {
+    let clean = text.trim();
+    // Remove markdown code blocks
+    clean = clean.replace(/```json/g, '').replace(/```/g, '');
+    // Remove potential leading/trailing garbage
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+        clean = clean.substring(firstBrace, lastBrace + 1);
+    }
+    return JSON.parse(clean);
+  } catch (e) {
+    console.error("JSON Parse Failed:", e, "Text was:", text);
+    return fallback;
+  }
+};
+
+/**
  * Generates the initial script structure with richer plots.
  */
 export const generateScriptBlueprint = async (prompt: string, lang: Language = 'zh-CN', settings?: AppSettings): Promise<Partial<Script>> => {
   return withRetry(async () => {
-    const ai = getClient(settings);
     const langInstruction = lang === 'zh-CN' ? "Respond entirely in Simplified Chinese." : "Respond in English.";
-    
     const systemInstruction = `
-      You are a world-class screenwriter and dramatist.
-      Your goal is to create a DEEP, COHERENT, and EMOTIONALLY GRIPPING script scenario.
-      
-      CORE GUIDELINES:
-      1. **Causal Fluency**: Plot points must follow a logical cause-and-effect chain. Avoid random events. Event A must lead to Event B.
-      2. **Character Contrast**: Characters must be foils to each other. They should have conflicting philosophies or goals to drive natural tension.
-      3. **Vivid Setting**: The setting should interact with the plot, not just be a background.
-      4. **Specific Voices**: Define specific speaking styles (e.g., "Short, punchy sentences", "Uses flowery metaphors", "Stutters when nervous").
-      
+      You are a world-class screenwriter.
+      Create a detailed script scenario.
+      1. Plot Points must be sequential and causal.
+      2. Characters must have conflicting goals.
       ${langInstruction}
     `;
 
+    // Strategy Pattern: Check Provider
+    if (settings?.activeProvider === 'OPENROUTER') {
+        const jsonSchemaDesc = `
+        Return valid JSON with this structure:
+        {
+            "title": "string",
+            "premise": "string",
+            "setting": "string",
+            "plotPoints": ["string"],
+            "possibleEndings": ["string"],
+            "characters": [{ "name": "string", "role": "string", "personality": "string", "speakingStyle": "string", "visualDescription": "string" }]
+        }
+        `;
+        const data = await callOpenRouter(settings, [
+            { role: "system", content: systemInstruction + jsonSchemaDesc },
+            { role: "user", content: `Create a script scenario based on: "${prompt}".` }
+        ], true);
+        
+        return processScriptData(data, prompt);
+    }
+
+    // Default: Gemini
+    const ai = getClient(settings);
     const response = await ai.models.generateContent({
       model: TEXT_MODEL,
-      contents: `Create a script scenario based on this idea: "${prompt}". Make it dramatic and fluid.`,
+      contents: `Create a script scenario based on: "${prompt}".`,
       config: {
         systemInstruction,
         responseMimeType: "application/json",
@@ -68,17 +145,9 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
           properties: {
             title: { type: Type.STRING },
             premise: { type: Type.STRING },
-            setting: { type: Type.STRING, description: "Detailed visual setting" },
-            plotPoints: { 
-              type: Type.ARRAY, 
-              items: { type: Type.STRING },
-              description: "5 key chronological events representing the story arc"
-            },
-            possibleEndings: { 
-              type: Type.ARRAY, 
-              items: { type: Type.STRING },
-              description: "2 distinct emotional endings"
-            },
+            setting: { type: Type.STRING },
+            plotPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+            possibleEndings: { type: Type.ARRAY, items: { type: Type.STRING } },
             characters: {
               type: Type.ARRAY,
               items: {
@@ -86,46 +155,144 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
                 properties: {
                   name: { type: Type.STRING },
                   role: { type: Type.STRING },
-                  personality: { type: Type.STRING, description: "Deep psychological traits & motivations" },
-                  speakingStyle: { type: Type.STRING, description: "Distinct verbal tics, vocabulary level, or rhythm" },
-                  visualDescription: { type: Type.STRING, description: "Detailed physical appearance" },
+                  personality: { type: Type.STRING },
+                  speakingStyle: { type: Type.STRING },
+                  visualDescription: { type: Type.STRING },
                 },
                 required: ["name", "role", "personality", "speakingStyle", "visualDescription"]
               }
             }
-          },
-          required: ["title", "premise", "setting", "characters", "plotPoints", "possibleEndings"]
+          }
         }
       }
     });
 
-    if (!response.text) throw new Error("Failed to generate script blueprint");
-    
-    const data = JSON.parse(response.text);
-    
+    const data = safeJsonParse(response.text || "{}", {});
+    return processScriptData(data, prompt);
+  });
+};
+
+// Helper to normalize script data from any provider
+const processScriptData = (data: any, originalPrompt: string) => {
     return {
-      title: data.title,
-      premise: data.premise,
-      setting: data.setting,
-      plotPoints: data.plotPoints || [],
-      possibleEndings: data.possibleEndings || [],
-      characters: data.characters.map((c: any) => ({
+      title: data.title || "Untitled",
+      premise: data.premise || originalPrompt,
+      setting: data.setting || "",
+      plotPoints: Array.isArray(data.plotPoints) ? data.plotPoints : [],
+      possibleEndings: Array.isArray(data.possibleEndings) ? data.possibleEndings : [],
+      characters: (data.characters || []).map((c: any) => ({
         id: crypto.randomUUID(),
-        name: c.name,
-        role: c.role,
-        personality: c.personality,
-        speakingStyle: c.speakingStyle || "Neutral",
-        visualDescription: c.visualDescription,
+        name: c.name || "Unknown",
+        role: c.role || "Extra",
+        personality: c.personality || "Neutral",
+        speakingStyle: c.speakingStyle || "Normal",
+        visualDescription: c.visualDescription || "A person",
         isUserControlled: false,
       })),
       history: [],
       lastUpdated: Date.now()
     };
-  });
 };
 
 /**
- * Refines text.
+ * Generates a single new character that fits the script.
+ */
+export const generateSingleCharacter = async (script: Script, settings?: AppSettings): Promise<Character> => {
+    return withRetry(async () => {
+        const promptText = `
+            Context: ${script.title}. ${script.premise}.
+            Existing Characters: ${script.characters.map(c => c.name).join(', ')}.
+            Task: Create ONE new unique character that adds conflict or comedy to this group.
+            Return JSON only with keys: name, role, personality, speakingStyle, visualDescription.
+        `;
+
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+            data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: promptText,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            role: { type: Type.STRING },
+                            personality: { type: Type.STRING },
+                            speakingStyle: { type: Type.STRING },
+                            visualDescription: { type: Type.STRING }
+                        }
+                    }
+                }
+            });
+            data = safeJsonParse(response.text || "{}", {});
+        }
+
+        const fallback = { name: "New Character", role: "Mystery", personality: "Unknown", speakingStyle: "Quiet", visualDescription: "Blurry" };
+        const finalData = { ...fallback, ...data };
+
+        return {
+            id: crypto.randomUUID(),
+            name: finalData.name,
+            role: finalData.role,
+            personality: finalData.personality,
+            speakingStyle: finalData.speakingStyle,
+            visualDescription: finalData.visualDescription,
+            isUserControlled: false
+        };
+    });
+};
+
+/**
+ * RECONSTRUCTS the future plot based on a Director Command (God Mode).
+ */
+export const regenerateFuturePlot = async (
+    script: Script, 
+    directorCommand: string, 
+    settings?: AppSettings
+): Promise<string[]> => {
+    return withRetry(async () => {
+        const historySummary = script.history.slice(-10).map(h => h.content).join(" ");
+        const promptText = `
+            Title: ${script.title}
+            Current Plot Plan: ${JSON.stringify(script.plotPoints)}
+            Recent Events: ${historySummary}
+            EVENT: The Director (God) has intervened with this command: "${directorCommand}".
+            TASK: Rewrite the remaining plot points to logically follow this new event. 
+            The story must change direction based on this intervention.
+            Return a JSON object with property "newPlotPoints" (array of strings).
+        `;
+
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+            data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: promptText,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            newPlotPoints: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        }
+                    }
+                }
+            });
+            data = safeJsonParse(response.text || "{}", {});
+        }
+
+        return data.newPlotPoints || script.plotPoints;
+    });
+};
+
+/**
+ * Refines text (Standard).
  */
 export const refineText = async (
   currentText: string, 
@@ -135,23 +302,25 @@ export const refineText = async (
   settings?: AppSettings
 ): Promise<string> => {
   return withRetry(async () => {
-    const ai = getClient(settings);
     const langInstruction = lang === 'zh-CN' ? "Respond in Simplified Chinese." : "Respond in English.";
-    
-    const prompt = `
-      Context: ${scriptContext.title}. ${scriptContext.premise}
-      Task: Improve the following "${fieldType}" text. Make it more dramatic, concise, and evocative.
+    const promptText = `
+      Context: ${scriptContext.title}.
+      Task: Improve this "${fieldType}" to be more dramatic and concise.
       Text: "${currentText}"
       ${langInstruction}
-      Return ONLY the refined text.
+      Return ONLY the refined text string.
     `;
 
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt
-    });
-
-    return response.text?.trim() || currentText;
+    if (settings?.activeProvider === 'OPENROUTER') {
+        return await callOpenRouter(settings, [{ role: "user", content: promptText }]);
+    } else {
+        const ai = getClient(settings);
+        const response = await ai.models.generateContent({
+            model: TEXT_MODEL,
+            contents: promptText
+        });
+        return response.text?.trim() || currentText;
+    }
   });
 };
 
@@ -165,117 +334,94 @@ export const generateNextBeat = async (
     settings?: AppSettings
 ): Promise<{ characterId: string; content: string; type: 'dialogue' | 'action' | 'narration' }> => {
   return withRetry(async () => {
-    const ai = getClient(settings);
     const langInstruction = lang === 'zh-CN' ? "Respond in Simplified Chinese." : "Respond in English.";
     
     // Context window
-    const recentHistory = script.history.slice(-20);
+    const recentHistory = script.history.slice(-15);
     const historyText = recentHistory.map(m => {
       const charName = script.characters.find(c => c.id === m.characterId)?.name || "Narrator";
-      return `${charName} [${m.type.toUpperCase()}]: ${m.content}`;
+      return `${charName} [${m.type}]: ${m.content}`;
     }).join("\n");
 
     const characterProfiles = script.characters.map(c => 
-      `### ${c.name} (${c.role})
-       - Personality: ${c.personality}
-       - Speaking Style (MUST MIMIC): ${c.speakingStyle}`
+      `Name: ${c.name}, Style: ${c.speakingStyle}, Personality: ${c.personality}`
     ).join("\n");
 
     let promptContext = "";
-    
-    // CRITICAL: God Mode / Director Override Logic - Improved for Natural Flow
     if (forcedDirectorCommand) {
         promptContext = `
-        🚨 **DIRECTOR INTERVENTION (GOD MODE)** 🚨
-        The Director has injected a specific event or command: "${forcedDirectorCommand}".
-        
-        **CRITICAL INSTRUCTION**: 
-        Do NOT just paste this event blindly. You must **weave it into the narrative flow**.
-        1. If it's an action event, describe it vividly via the Narrator.
-        2. If it's a character instruction, justify it internally (e.g., a sudden realization, a hidden motive revealed).
-        3. The characters must react to this new reality *immediately* and *in-character*.
-        
-        Make it feel like a shocking plot twist or a natural evolution, not a glitch.
+        URGENT: The Director executed: "${forcedDirectorCommand}".
+        You MUST generate the immediate reaction to this.
+        If it's an action, narrate it. If a character reacts, have them speak.
+        Integrate this event smoothly.
         `;
     } else {
         promptContext = `
-        **NARRATIVE FLOW INSTRUCTIONS**:
-        1. **Pacing**: Analyze the previous beat. If it was intense, maybe this beat is a reaction. If it was quiet, introduce tension.
-        2. **Subtext**: Characters should rarely say exactly what they mean. Use subtext.
-        3. **Plot Progression**: Gently nudge the story towards the next Plot Point: "${script.plotPoints.find(p => !historyText.includes(p)) || 'Climax'}".
-        
-        **CHARACTER STRICTNESS**:
-        - You MUST strictly adhere to 'Speaking Style'. 
-        - If a character is rude, they must NOT be polite.
-        - If a character is shy, they might stutter or use fragments.
-        - DO NOT sound like a generic AI assistant.
+        Progress the story towards: "${script.plotPoints[0] || 'Conclusion'}".
+        Ensure characters speak according to their Style.
         `;
     }
 
-    const prompt = `
+    const promptText = `
       Title: ${script.title}
       Setting: ${script.setting}
-      
-      Characters & Profiles:
-      ${characterProfiles}
-
-      Recent Transcript:
-      ${historyText}
-
+      Chars: ${characterProfiles}
+      History: ${historyText}
       ${promptContext}
-
-      Task: Generate the NEXT single beat (Dialogue, Action, or Narration).
+      Task: Generate NEXT beat.
       ${langInstruction}
-      
-      Return JSON:
-      {
-        "characterName": "Name or 'Narrator'",
-        "type": "dialogue" | "action" | "narration",
-        "content": "The text content. If dialogue, do not include the name prefix."
-      }
+      Return JSON: { "characterName": "...", "type": "dialogue|action|narration", "content": "..." }
     `;
 
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            characterName: { type: Type.STRING },
-            type: { type: Type.STRING, enum: ["dialogue", "action", "narration"] },
-            content: { type: Type.STRING }
-          },
-          required: ["characterName", "type", "content"]
-        }
-      }
-    });
+    let data;
+    if (settings?.activeProvider === 'OPENROUTER') {
+         data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+    } else {
+        const ai = getClient(settings);
+        const response = await ai.models.generateContent({
+          model: TEXT_MODEL,
+          contents: promptText,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                characterName: { type: Type.STRING },
+                type: { type: Type.STRING, enum: ["dialogue", "action", "narration"] },
+                content: { type: Type.STRING }
+              }
+            }
+          }
+        });
+        data = safeJsonParse(response.text || "{}", {});
+    }
 
-    if (!response.text) throw new Error("Failed to generate beat");
-    const data = JSON.parse(response.text);
+    const fallback = { characterName: 'Narrator', type: 'narration', content: '...' };
+    const finalData = { ...fallback, ...data };
 
     let charId = 'narrator';
-    if (data.characterName !== 'Narrator') {
-      const char = script.characters.find(c => c.name === data.characterName);
+    if (finalData.characterName !== 'Narrator') {
+      const char = script.characters.find(c => c.name === finalData.characterName);
       if (char) charId = char.id;
     }
 
     return {
       characterId: charId,
-      content: data.content,
-      type: data.type as any
+      content: finalData.content || "...",
+      type: (finalData.type as any) || 'narration'
     };
   });
 };
 
 /**
- * Generates an avatar.
+ * Generates an avatar. 
+ * NOTE: Image generation always uses Gemini (default key or user key) as OpenRouter image API is different.
  */
 export const generateAvatarImage = async (character: Character, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
-    const ai = getClient(settings);
-    const prompt = `Cinematic portrait of ${character.name}, ${character.role}. ${character.visualDescription}. High detail, 8k, dramatic lighting.`;
+    // Always use Google Client for images (supports default key)
+    const ai = getClient(settings); 
+    const prompt = `Portrait of ${character.name}, ${character.role}, ${character.visualDescription}. High quality, stylized avatar, headshot.`;
     
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
@@ -283,14 +429,10 @@ export const generateAvatarImage = async (character: Character, settings?: AppSe
     });
 
     const parts = response.candidates?.[0]?.content?.parts;
-    if (!parts) throw new Error("No image generated");
-
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
+    if (parts && parts[0]?.inlineData?.data) {
+        return `data:${parts[0].inlineData.mimeType};base64,${parts[0].inlineData.data}`;
     }
-    throw new Error("No image data found");
+    throw new Error("No image data");
   });
 };
 
@@ -299,9 +441,10 @@ export const generateAvatarImage = async (character: Character, settings?: AppSe
  */
 export const generateSceneImage = async (sceneDescription: string, scriptTitle: string, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
+    // Always use Google Client for images
     const ai = getClient(settings);
-    const desc = sceneDescription.length > 400 ? sceneDescription.substring(0, 400) : sceneDescription;
-    const prompt = `Movie concept art, wide shot. Story: ${scriptTitle}. Scene: ${desc}. Masterpiece, 4k, atmospheric, detailed.`;
+    const desc = sceneDescription.length > 300 ? sceneDescription.substring(0, 300) : sceneDescription;
+    const prompt = `Cinematic shot, ${scriptTitle}, ${desc}. 4k, detailed, atmospheric.`;
 
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,
@@ -309,13 +452,9 @@ export const generateSceneImage = async (sceneDescription: string, scriptTitle: 
     });
 
     const parts = response.candidates?.[0]?.content?.parts;
-    if (!parts) throw new Error("No image generated");
-
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
+    if (parts && parts[0]?.inlineData?.data) {
+        return `data:${parts[0].inlineData.mimeType};base64,${parts[0].inlineData.data}`;
     }
-    throw new Error("No image data found");
+    throw new Error("No image data");
   });
 };

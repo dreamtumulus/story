@@ -16,7 +16,12 @@ export interface User {
 
 export interface AppSettings {
   apiKey?: string;
-  baseUrl?: string; 
+  baseUrl?: string;
+  
+  // New fields for multi-model support
+  activeProvider?: 'GEMINI' | 'OPENROUTER';
+  openRouterKey?: string;
+  openRouterModel?: string; // e.g., 'google/gemini-2.0-flash-001'
 }
 
 export interface Character {

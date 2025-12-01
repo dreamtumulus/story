@@ -56,6 +56,9 @@ export interface Script {
   history: Message[];
   lastUpdated: number;
   
+  // Progress Tracking
+  currentPlotIndex: number;
+
   // Template & Community fields
   isTemplate?: boolean;
   author?: string;

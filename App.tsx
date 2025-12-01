@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Play, Pause, Save, Settings, 
@@ -7,7 +8,7 @@ import {
   Users, Globe, Trophy, Share2, Download, Copy, Star, Mic, Send,
   Wand2, RefreshCw, LayoutDashboard, Film, BookOpen, Crown, Clapperboard,
   LogOut, User as UserIcon, Key, X, AlertCircle, Loader2, Shuffle,
-  Cloud, Zap
+  Cloud, Zap, SkipForward
 } from 'lucide-react';
 import { Script, Character, Message, Language, Achievement, User, AppSettings } from './types';
 import { 
@@ -15,6 +16,30 @@ import {
     refineText, generateSceneImage, regenerateFuturePlot, generateSingleCharacter 
 } from './services/aiService';
 import { authService } from './services/authService';
+
+// --- Character Text Colors (Pastel Palette) ---
+const CHAR_COLORS = [
+    '#fca5a5', // red-300
+    '#86efac', // green-300
+    '#93c5fd', // blue-300
+    '#fcd34d', // amber-300
+    '#d8b4fe', // purple-300
+    '#f472b6', // pink-300
+    '#67e8f9', // cyan-300
+    '#cbd5e1', // slate-300
+    '#fdba74', // orange-300
+    '#a5b4fc', // indigo-300
+];
+
+const getCharacterColor = (charId: string) => {
+    if (charId === 'narrator') return '#fbbf24'; // Amber for narrator
+    let hash = 0;
+    for (let i = 0; i < charId.length; i++) {
+        hash = charId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % CHAR_COLORS.length;
+    return CHAR_COLORS[index];
+};
 
 // --- Logo Component ---
 const Logo = ({ className = "" }: { className?: string }) => (
@@ -105,6 +130,9 @@ const TRANSLATIONS = {
     openRouterModel: "OpenRouter Model ID (默认 gemini-2.0-flash-lite)",
     geminiKey: "Gemini API Key (可选)",
     autoAvatarGen: "正在为角色生成头像...",
+    skipChapter: "下一章",
+    chapter: "章节",
+    chapterGoal: "本章目标",
   },
   'en-US': {
     title: "Daydreaming",
@@ -182,6 +210,9 @@ const TRANSLATIONS = {
     openRouterModel: "OpenRouter Model ID",
     geminiKey: "Gemini API Key (Optional)",
     autoAvatarGen: "Generating avatars...",
+    skipChapter: "Next Chapter",
+    chapter: "Chapter",
+    chapterGoal: "Goal",
   }
 };
 
@@ -361,7 +392,11 @@ export default function App() {
             }
         }
 
-        const nextBeat = await generateNextBeat(currentScript, forcedCommand, lang, appSettings);
+        // Get Current Plot Target
+        const currentPlotIndex = currentScript.currentPlotIndex || 0;
+        const targetPlot = currentScript.plotPoints[currentPlotIndex] || currentScript.plotPoints[currentScript.plotPoints.length - 1];
+
+        const nextBeat = await generateNextBeat(currentScript, forcedCommand, targetPlot, lang, appSettings);
         
         let imageUrl = undefined;
         if (nextBeat.type === 'narration') {
@@ -391,7 +426,8 @@ export default function App() {
       }
     };
     
-    const timer = setTimeout(gameLoop, 1500);
+    // Faster loop for openrouter/general responsiveness (1000ms instead of 1500ms)
+    const timer = setTimeout(gameLoop, 1000);
     return () => clearTimeout(timer);
   }, [isPlaying, currentScript, view, turnProcessing, lang, appSettings, isReconstructing]);
 
@@ -472,6 +508,7 @@ export default function App() {
             : `The scene opens in ${blueprint.setting}. ${blueprint.premise}`,
           timestamp: Date.now()
         }],
+        currentPlotIndex: 0,
         lastUpdated: Date.now(),
         isTemplate: false
       };
@@ -497,7 +534,7 @@ export default function App() {
     if (!currentUser) return;
     const newTemplate: Script = {
       id: crypto.randomUUID(), ownerId: currentUser.id, title: "新模版", premise: "", setting: "", plotPoints: [], possibleEndings: [], characters: [],
-      history: [], lastUpdated: Date.now(), isTemplate: true, author: currentUser.username
+      history: [], currentPlotIndex: 0, lastUpdated: Date.now(), isTemplate: true, author: currentUser.username
     };
     setScripts(prev => [newTemplate, ...prev]);
     setCurrentScript(newTemplate);
@@ -572,6 +609,33 @@ export default function App() {
           pts[index] = newText;
           updateScriptState({...currentScript, plotPoints: pts});
       });
+  };
+
+  const handleNextChapter = () => {
+    if (!currentScript) return;
+    const currentIndex = currentScript.currentPlotIndex || 0;
+    if (currentIndex >= currentScript.plotPoints.length - 1) return;
+
+    const newIndex = currentIndex + 1;
+    const nextPlot = currentScript.plotPoints[newIndex];
+    
+    updateScriptState({
+        ...currentScript,
+        currentPlotIndex: newIndex
+    });
+    
+    // Inject system message about chapter change
+    const newMessage: Message = {
+        id: crypto.randomUUID(),
+        characterId: 'narrator',
+        content: `>>> ${t.chapter} ${newIndex + 1}: ${nextPlot}`,
+        type: 'narration',
+        timestamp: Date.now()
+    };
+    handleUpdateScriptHistory(newMessage);
+    
+    // Resume play if paused
+    if (!isPlaying) setIsPlaying(true);
   };
 
   // --- Views ---
@@ -791,6 +855,9 @@ export default function App() {
   const renderStage = () => {
     if (!currentScript) return null;
     const userCharacters = (currentScript.characters || []).filter(c => c.isUserControlled);
+    const currentPlotIndex = currentScript.currentPlotIndex || 0;
+    const totalPlots = Math.max(1, currentScript.plotPoints.length);
+    const progress = ((currentPlotIndex + 1) / totalPlots) * 100;
     
     const customStyles = (
         <style>{`
@@ -820,25 +887,50 @@ export default function App() {
             </div>
         )}
 
-        <header className="flex-shrink-0 border-b border-zinc-800/50 p-4 flex justify-between items-center bg-zinc-900/60 backdrop-blur-xl z-20 shadow-lg">
-          <div className="flex items-center gap-4">
-             <Button variant="ghost" onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }} className="hover:bg-white/10">{t.exit}</Button>
-             <div>
-                <h1 className="font-bold text-zinc-100 text-lg tracking-tight drop-shadow-md flex items-center gap-2">
-                    {currentScript.title} 
-                    {appSettings.activeProvider === 'OPENROUTER' && <span className="text-[9px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-700">OPENROUTER</span>}
-                </h1>
-                <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold opacity-80">{t.liveStage}</p>
-             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md transition-colors ${isPlaying ? 'bg-red-500/10 text-red-400 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50'}`}>
-              <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-red-500 animate-pulse' : 'bg-zinc-600'}`} />{isPlaying ? t.onAir : t.paused}
+        <header className="flex-shrink-0 border-b border-zinc-800/50 flex flex-col bg-zinc-900/60 backdrop-blur-xl z-20 shadow-lg">
+          <div className="p-4 flex justify-between items-center">
+            <div className="flex items-center gap-4">
+                <Button variant="ghost" onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }} className="hover:bg-white/10">{t.exit}</Button>
+                <div>
+                    <h1 className="font-bold text-zinc-100 text-lg tracking-tight drop-shadow-md flex items-center gap-2">
+                        {currentScript.title} 
+                        {appSettings.activeProvider === 'OPENROUTER' && <span className="text-[9px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-700">OPENROUTER</span>}
+                    </h1>
+                    <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold opacity-80">{t.liveStage}</p>
+                </div>
             </div>
-            {isPlaying ? 
-                <Button onClick={() => setIsPlaying(false)} icon={Pause} variant="secondary" className="bg-zinc-800/80 backdrop-blur border-zinc-700 hover:bg-zinc-700">Pause</Button> : 
-                <Button onClick={() => setIsPlaying(true)} icon={Play} variant="primary" className="shadow-indigo-500/20">Action</Button>
-            }
+            
+            <div className="flex items-center gap-3">
+                 {/* Chapter Skip */}
+                 {currentPlotIndex < totalPlots - 1 && (
+                     <Button 
+                        size="sm" 
+                        variant="secondary" 
+                        onClick={handleNextChapter} 
+                        icon={SkipForward}
+                        className="text-xs border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800"
+                    >
+                        {t.skipChapter}
+                    </Button>
+                 )}
+
+                <div className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md transition-colors ${isPlaying ? 'bg-red-500/10 text-red-400 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50'}`}>
+                <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-red-500 animate-pulse' : 'bg-zinc-600'}`} />{isPlaying ? t.onAir : t.paused}
+                </div>
+                {isPlaying ? 
+                    <Button onClick={() => setIsPlaying(false)} icon={Pause} variant="secondary" className="bg-zinc-800/80 backdrop-blur border-zinc-700 hover:bg-zinc-700">Pause</Button> : 
+                    <Button onClick={() => setIsPlaying(true)} icon={Play} variant="primary" className="shadow-indigo-500/20">Action</Button>
+                }
+            </div>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-zinc-800/30 h-1">
+             <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-1000" style={{ width: `${progress}%` }} />
+          </div>
+          <div className="px-4 py-1 bg-black/20 text-[10px] text-zinc-500 font-mono flex justify-between">
+              <span>{t.chapter}: {currentPlotIndex + 1} / {totalPlots}</span>
+              <span className="truncate max-w-[50%] text-right opacity-70">{t.chapterGoal}: {currentScript.plotPoints[currentPlotIndex]}</span>
           </div>
         </header>
 
@@ -846,18 +938,19 @@ export default function App() {
           {(currentScript.history || []).map((msg, idx) => {
             const char = currentScript.characters.find(c => c.id === msg.characterId);
             const isUser = char?.isUserControlled;
+            const charColor = getCharacterColor(msg.characterId);
             
-            // Narration Card
+            // Narration Card (Scene / Story Progression)
             if (msg.type === 'narration') {
               return (
                 <div key={msg.id} className="flex flex-col items-center my-10 animate-slide-up w-full">
                    <div className="relative max-w-3xl w-full">
                      <div className="absolute top-1/2 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-amber-900/40 to-transparent"></div>
-                     <div className="relative z-10 mx-auto max-w-2xl text-center p-8 bg-zinc-950/80 backdrop-blur-md border-y border-zinc-800/50 shadow-2xl rounded-sm">
+                     <div className="relative z-10 mx-auto max-w-2xl text-center p-8 bg-zinc-950/90 backdrop-blur-md border border-amber-900/30 shadow-2xl rounded-sm">
                        <div className="text-amber-500/70 text-xs font-bold uppercase tracking-[0.3em] mb-4 flex items-center justify-center gap-2">
                           <span className="w-8 h-[1px] bg-amber-500/50"></span> SCENE <span className="w-8 h-[1px] bg-amber-500/50"></span>
                        </div>
-                       <p className="text-zinc-200 font-serif text-xl leading-relaxed tracking-wide italic antialiased">{msg.content}</p>
+                       <p className="text-amber-100/90 font-serif text-2xl leading-relaxed tracking-wide antialiased drop-shadow-sm">{msg.content}</p>
                      </div>
                    </div>
                    {msg.imageUrl && (
@@ -869,12 +962,12 @@ export default function App() {
               );
             }
             
-            // Action Text
+            // Action Text (Distinct from Narration, subtle event)
             if (msg.type === 'action') {
                 return (
                     <div key={msg.id} className="flex gap-4 max-w-4xl mx-auto items-center justify-center animate-slide-up my-4 opacity-80 hover:opacity-100 transition-opacity">
-                        <div className="text-zinc-500 text-sm font-medium italic px-4 py-1 rounded-full bg-zinc-900/50 border border-zinc-800/50 flex items-center gap-2">
-                             <span className="text-zinc-300 not-italic font-bold">{char?.name}</span> {msg.content}
+                        <div className="text-zinc-500 text-sm italic px-6 py-2 rounded-full bg-zinc-900/30 border border-zinc-800/30 flex items-center gap-2 backdrop-blur-sm">
+                             <span className="not-italic font-bold" style={{ color: charColor }}>{char?.name}</span> {msg.content}
                         </div>
                     </div>
                 );
@@ -884,7 +977,7 @@ export default function App() {
             return (
               <div key={msg.id} className={`flex gap-6 max-w-5xl mx-auto animate-slide-up ${isUser ? 'flex-row-reverse' : ''} group my-8`}>
                 <div className={`flex-shrink-0 mt-4 transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg rounded-full z-10 ${isUser ? 'order-1' : 'order-first'}`}>
-                    <div className={`rounded-full p-1 ${isUser ? 'bg-gradient-to-br from-indigo-500 to-purple-500' : 'bg-gradient-to-br from-zinc-600 to-zinc-800'}`}>
+                    <div className={`rounded-full p-1`} style={{ background: `linear-gradient(135deg, ${charColor}20, #18181b)` }}>
                         <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="lg" />
                     </div>
                 </div>
@@ -894,7 +987,7 @@ export default function App() {
                   <div className={`absolute -inset-4 rounded-xl -z-10 blur-xl opacity-0 transition-opacity group-hover:opacity-100 ${isUser ? 'bg-indigo-900/20' : 'bg-zinc-800/20'}`}></div>
                   
                   {/* Speaker Name Tag */}
-                  <span className={`text-[10px] mb-1.5 px-3 py-0.5 rounded-full font-bold tracking-widest uppercase border backdrop-blur-sm shadow-sm ${isUser ? 'bg-indigo-900/50 text-indigo-200 border-indigo-500/30' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700'}`}>
+                  <span className={`text-[10px] mb-1.5 px-3 py-0.5 rounded-full font-bold tracking-widest uppercase border backdrop-blur-sm shadow-sm bg-zinc-950/80 border-zinc-800`} style={{ color: charColor }}>
                     {char?.name} • {char?.role}
                   </span>
                   
@@ -902,11 +995,14 @@ export default function App() {
                     relative px-8 py-6 shadow-2xl backdrop-blur-md border
                     text-lg md:text-xl font-medium leading-relaxed tracking-wide
                     ${isUser 
-                        ? 'bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl rounded-tr-sm border-indigo-400/20 text-white shadow-indigo-900/20' 
-                        : 'bg-zinc-800/95 rounded-2xl rounded-tl-sm border-zinc-700/50 text-zinc-100 shadow-black/40'
+                        ? 'bg-gradient-to-br from-indigo-950/80 to-purple-950/80 rounded-2xl rounded-tr-sm border-indigo-500/20 shadow-indigo-900/20' 
+                        : 'bg-zinc-900/90 rounded-2xl rounded-tl-sm border-zinc-800 text-zinc-100 shadow-black/40'
                     }
                   `}>
-                    {msg.content}
+                    {/* Colored Text Logic */}
+                    <span style={{ color: isUser ? '#e0e7ff' : charColor, textShadow: isUser ? 'none' : `0 0 15px ${charColor}40` }}>
+                        {msg.content}
+                    </span>
                   </div>
                 </div>
               </div>

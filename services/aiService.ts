@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Script, Character, Message, Language, AppSettings } from "../types";
 
@@ -190,6 +191,7 @@ const processScriptData = (data: any, originalPrompt: string) => {
         isUserControlled: false,
       })),
       history: [],
+      currentPlotIndex: 0,
       lastUpdated: Date.now()
     };
 };
@@ -330,6 +332,7 @@ export const refineText = async (
 export const generateNextBeat = async (
     script: Script, 
     forcedDirectorCommand: string | null,
+    targetPlotPoint: string | null,
     lang: Language = 'zh-CN',
     settings?: AppSettings
 ): Promise<{ characterId: string; content: string; type: 'dialogue' | 'action' | 'narration' }> => {
@@ -356,8 +359,11 @@ export const generateNextBeat = async (
         Integrate this event smoothly.
         `;
     } else {
+        // Use the explicit target plot point passed from the App
+        const currentGoal = targetPlotPoint || "The story's conclusion";
         promptContext = `
-        Progress the story towards: "${script.plotPoints[0] || 'Conclusion'}".
+        Current Chapter Goal: "${currentGoal}".
+        Progress the story towards this goal naturally.
         Ensure characters speak according to their Style.
         `;
     }

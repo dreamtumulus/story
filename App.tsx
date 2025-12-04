@@ -106,7 +106,7 @@ const TRANSLATIONS = {
     role: "角色/职业",
     personality: "性格特征",
     speakingStyle: "语言风格",
-    visual: "外貌描述",
+    visual: "外貌描述 (可选)",
     yourCue: "轮到你表演了",
     directorNote: "导演提示：请根据角色性格输入对话",
     aiComplete: "AI 自动刻画",
@@ -203,7 +203,7 @@ const TRANSLATIONS = {
     role: "Role",
     personality: "Personality",
     speakingStyle: "Style",
-    visual: "Visual",
+    visual: "Visual (Optional)",
     yourCue: "Your Cue",
     directorNote: "Director's Note",
     aiComplete: "AI Auto-Complete",
@@ -603,9 +603,14 @@ export default function App() {
       setIsCharAutoFilling(true);
       try {
           const filled = await completeCharacterProfile(editingChar, appSettings);
-          setEditingChar(filled);
-      } catch (e) {
-          showNotification("AI Error", "Failed to autocomplete", 'error');
+          // If the AI returned emptiness (unlikely with retry, but possible with timeout), we should not wipe existing data
+          setEditingChar(prev => ({
+              ...prev,
+              ...filled
+          }));
+      } catch (e: any) {
+          showNotification("AI Error", "Failed to autocomplete. Check API Key.", 'error');
+          console.error(e);
       } finally {
           setIsCharAutoFilling(false);
       }
@@ -1109,7 +1114,7 @@ export default function App() {
                               </Button>
                           </div>
                           <p className="text-[10px] text-zinc-500 mt-2 ml-1">
-                              Tip: Enter a famous name (e.g. "Sherlock Holmes") and click Magic Fill to auto-generate the profile!
+                              Tip: Enter a name (e.g. "Sherlock Holmes") and click Magic Fill to auto-generate the soul!
                           </p>
                       </div>
 

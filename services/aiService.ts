@@ -19,6 +19,9 @@ const getClient = (settings?: AppSettings) => {
     return new GoogleGenAI({ apiKey });
 };
 
+// --- Helper for Timeout ---
+const timeoutPromise = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), ms));
+
 // --- OpenRouter Fetch Helper ---
 async function callOpenRouter(
     settings: AppSettings | undefined,
@@ -30,7 +33,7 @@ async function callOpenRouter(
     
     const model = settings?.openRouterModel || 'google/gemini-2.0-flash-lite-preview-02-05:free';
     
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const fetchPromise = fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
             "Authorization": `Bearer ${key}`,
@@ -45,6 +48,8 @@ async function callOpenRouter(
         })
     });
 
+    const response: any = await Promise.race([fetchPromise, timeoutPromise(20000)]);
+
     if (!response.ok) {
         throw new Error(`OpenRouter Error: ${response.statusText}`);
     }
@@ -57,7 +62,7 @@ async function callOpenRouter(
 // --- Retry Helper ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelay = 1000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 1, baseDelay = 1000): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
@@ -152,38 +157,41 @@ export const generateScriptBlueprint = async (
 
     // Default: Gemini
     const ai = getClient(settings);
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: `Create a script scenario.`,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            premise: { type: Type.STRING },
-            setting: { type: Type.STRING },
-            plotPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-            possibleEndings: { type: Type.ARRAY, items: { type: Type.STRING } },
-            characters: {
-              type: Type.ARRAY,
-              items: {
+    const response = await Promise.race([
+        ai.models.generateContent({
+            model: TEXT_MODEL,
+            contents: `Create a script scenario.`,
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                  name: { type: Type.STRING },
-                  role: { type: Type.STRING },
-                  personality: { type: Type.STRING },
-                  speakingStyle: { type: Type.STRING },
-                  visualDescription: { type: Type.STRING },
-                },
-                required: ["name", "role", "personality", "speakingStyle", "visualDescription"]
-              }
+                    title: { type: Type.STRING },
+                    premise: { type: Type.STRING },
+                    setting: { type: Type.STRING },
+                    plotPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    possibleEndings: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    characters: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                        name: { type: Type.STRING },
+                        role: { type: Type.STRING },
+                        personality: { type: Type.STRING },
+                        speakingStyle: { type: Type.STRING },
+                        visualDescription: { type: Type.STRING },
+                        },
+                        required: ["name", "role", "personality", "speakingStyle", "visualDescription"]
+                    }
+                    }
+                }
+                }
             }
-          }
-        }
-      }
-    });
+        }),
+        timeoutPromise(25000)
+    ]) as any;
 
     const data = safeJsonParse(response.text || "{}", {});
     return processScriptData(data, prompt, predefinedCharacters);
@@ -241,22 +249,26 @@ const processScriptData = (data: any, originalPrompt: string, preDefinedChars: G
 /**
  * Completes a Global Character Profile based on partial input.
  * Specialized for "Name-First" creation.
+ * Updated: Focuses primarily on Personality and Speaking Style.
  */
 export const completeCharacterProfile = async (partialChar: Partial<GlobalCharacter>, settings?: AppSettings): Promise<Partial<GlobalCharacter>> => {
     return withRetry(async () => {
         const prompt = `
-            You are an expert character designer for a roleplay storytelling app.
+            You are an expert character designer.
             
             USER INPUT NAME: "${partialChar.name || "Unknown"}"
             USER INPUT CONTEXT: ${JSON.stringify(partialChar)}
 
             TASK:
-            1. Analyze the name. Is it a specific famous character (from anime, literature, movies, history)?
-               - YES: You MUST fill the profile to match that specific character canonically.
-               - NO: Create a creative, coherent original character based on the name.
-            2. Fill in all missing fields (gender, age, personality, speakingStyle, visualDescription).
-            3. The "visualDescription" must be a high-quality prompt for an image generator.
-            4. The "speakingStyle" should capture their catchphrases, tone, and mannerisms.
+            1. Analyze the name. Is it a specific famous character?
+               - YES: Match their canonical personality and speech exactly.
+               - NO: Create a creative original character.
+            2. FOCUS HEAVILY on "personality" and "speakingStyle".
+               - Personality: Detailed psychological traits.
+               - Speaking Style: Specific tone, catchphrases, sentence structure (e.g., formal, slang, poetic).
+            3. "visualDescription": Keep it brief (appearance only). Do NOT write it as an image prompt.
+
+            CRITICAL: All generated text content MUST be in Simplified Chinese (简体中文).
 
             Return JSON with keys: name, gender, age, personality, speakingStyle, visualDescription.
         `;
@@ -266,24 +278,27 @@ export const completeCharacterProfile = async (partialChar: Partial<GlobalCharac
             data = await callOpenRouter(settings, [{ role: "user", content: prompt }], true);
         } else {
             const ai = getClient(settings);
-            const response = await ai.models.generateContent({
-                model: TEXT_MODEL,
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            name: { type: Type.STRING },
-                            gender: { type: Type.STRING },
-                            age: { type: Type.STRING },
-                            personality: { type: Type.STRING },
-                            speakingStyle: { type: Type.STRING },
-                            visualDescription: { type: Type.STRING }
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: TEXT_MODEL,
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                name: { type: Type.STRING },
+                                gender: { type: Type.STRING },
+                                age: { type: Type.STRING },
+                                personality: { type: Type.STRING },
+                                speakingStyle: { type: Type.STRING },
+                                visualDescription: { type: Type.STRING }
+                            }
                         }
                     }
-                }
-            });
+                }),
+                timeoutPromise(15000)
+            ]) as any;
             data = safeJsonParse(response.text || "{}", {});
         }
         
@@ -321,7 +336,6 @@ export const chatWithCharacter = async (
         Traits: ${character.gender}, ${character.age}.
         Personality: ${character.personality}
         Speaking Style: ${character.speakingStyle}
-        Visual: ${character.visualDescription}
         
         ${memoriesContext}
         
@@ -338,13 +352,16 @@ export const chatWithCharacter = async (
             ]);
         } else {
             const ai = getClient(settings);
-            const response = await ai.models.generateContent({
-                model: TEXT_MODEL,
-                contents: `User says: "${userMessage}"`,
-                config: {
-                    systemInstruction: systemPrompt
-                }
-            });
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: TEXT_MODEL,
+                    contents: `User says: "${userMessage}"`,
+                    config: {
+                        systemInstruction: systemPrompt
+                    }
+                }),
+                timeoutPromise(15000)
+            ]) as any;
             return response.text || "...";
         }
     });
@@ -371,6 +388,8 @@ export const evolveCharacterFromChat = async (
             1. Summarize 1 key fact or shared experience from this chat as a "Memory" (1 sentence). If nothing important happened, return empty string.
             2. Refine the Character's "Personality" to be more specific based on how they acted or what they learned.
             3. Refine the "Speaking Style" if they adopted any new mannerisms or catchphrases.
+            
+            IMPORTANT: Output in Simplified Chinese (简体中文).
 
             Return JSON:
             {
@@ -387,21 +406,24 @@ export const evolveCharacterFromChat = async (
              data = await callOpenRouter(settings, [{ role: "user", content: prompt }], true);
         } else {
             const ai = getClient(settings);
-            const response = await ai.models.generateContent({
-                model: TEXT_MODEL,
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            memory: { type: Type.STRING },
-                            newPersonality: { type: Type.STRING },
-                            newSpeakingStyle: { type: Type.STRING }
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: TEXT_MODEL,
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                memory: { type: Type.STRING },
+                                newPersonality: { type: Type.STRING },
+                                newSpeakingStyle: { type: Type.STRING }
+                            }
                         }
                     }
-                }
-            });
+                }),
+                timeoutPromise(15000)
+            ]) as any;
             data = safeJsonParse(response.text || "{}", {});
         }
 
@@ -422,6 +444,7 @@ export const generateSingleCharacter = async (script: Script, settings?: AppSett
             Context: ${script.title}. ${script.premise}.
             Existing Characters: ${script.characters.map(c => c.name).join(', ')}.
             Task: Create ONE new unique character that adds conflict or comedy to this group.
+            IMPORTANT: Respond in Simplified Chinese (简体中文).
             Return JSON only with keys: name, role, personality, speakingStyle, visualDescription.
         `;
 
@@ -482,6 +505,7 @@ export const regenerateFuturePlot = async (
             EVENT: The Director (God) has intervened with this command: "${directorCommand}".
             TASK: Rewrite the remaining plot points to logically follow this new event. 
             The story must change direction based on this intervention.
+            IMPORTANT: Respond in Simplified Chinese (简体中文).
             Return a JSON object with property "newPlotPoints" (array of strings).
         `;
 

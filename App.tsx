@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Play, Pause, Save, Settings, 
@@ -8,12 +6,13 @@ import {
   Users, Globe, Trophy, Share2, Download, Copy, Star, Mic, Send,
   Wand2, RefreshCw, LayoutDashboard, Film, BookOpen, Crown, Clapperboard,
   LogOut, User as UserIcon, Key, X, AlertCircle, Loader2, Shuffle,
-  Cloud, Zap, SkipForward
+  Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit
 } from 'lucide-react';
-import { Script, Character, Message, Language, Achievement, User, AppSettings } from './types';
+import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage } from './types';
 import { 
     generateScriptBlueprint, generateNextBeat, generateAvatarImage, 
-    refineText, generateSceneImage, regenerateFuturePlot, generateSingleCharacter 
+    refineText, generateSceneImage, regenerateFuturePlot, generateSingleCharacter,
+    completeCharacterProfile, chatWithCharacter, evolveCharacterFromChat
 } from './services/aiService';
 import { authService } from './services/authService';
 
@@ -62,6 +61,7 @@ const TRANSLATIONS = {
     dashboard: "剧场大厅",
     myScripts: "我的梦境",
     templates: "灵感库",
+    characters: "角色库",
     community: "社区",
     achievements: "成就",
     settings: "设置",
@@ -79,6 +79,7 @@ const TRANSLATIONS = {
     cast: "演员表",
     addActor: "手动添加",
     aiAddActor: "AI 创造角色",
+    importActor: "从角色库导入",
     genLook: "生成形象",
     playerControlled: "玩家扮演",
     observerMode: "观察者模式",
@@ -100,13 +101,15 @@ const TRANSLATIONS = {
     next: "下一步",
     back: "上一步",
     name: "姓名",
+    gender: "性别",
+    age: "年龄",
     role: "角色/职业",
     personality: "性格特征",
     speakingStyle: "语言风格",
     visual: "外貌描述",
     yourCue: "轮到你表演了",
     directorNote: "导演提示：请根据角色性格输入对话",
-    aiComplete: "AI补全/优化",
+    aiComplete: "AI 自动刻画",
     directorMode: "上帝指令",
     directorPlaceholder: "输入指令，如：'突然停电了' (AI将重构剧情)",
     inject: "注入指令",
@@ -133,6 +136,19 @@ const TRANSLATIONS = {
     skipChapter: "下一章",
     chapter: "章节",
     chapterGoal: "本章目标",
+    createCharacter: "新建角色",
+    editCharacter: "编辑角色",
+    uploadAvatar: "上传头像",
+    genAvatar: "AI生成头像",
+    aiFill: "✨ 一键补全设定",
+    chatWith: "聊天",
+    selectCharacters: "选择主演（可选）",
+    memories: "长期记忆",
+    memoriesHint: "AI 会根据聊天内容自动生成记忆，并优化性格。",
+    savingMemories: "正在保存记忆并优化角色性格...",
+    memorySaved: "角色已进化！记忆已更新。",
+    enterNameHint: "输入角色名（如：林黛玉，孙悟空）",
+    autoFillLoading: "正在刻画角色形象...",
   },
   'en-US': {
     title: "Daydreaming",
@@ -142,6 +158,7 @@ const TRANSLATIONS = {
     dashboard: "Dashboard",
     myScripts: "My Dreams",
     templates: "Templates",
+    characters: "Characters",
     community: "Community",
     achievements: "Achievements",
     settings: "Settings",
@@ -159,6 +176,7 @@ const TRANSLATIONS = {
     cast: "Cast",
     addActor: "Add Actor",
     aiAddActor: "AI Create Char",
+    importActor: "Import Char",
     genLook: "Gen Look",
     playerControlled: "Player Controlled",
     observerMode: "Observer Mode",
@@ -180,13 +198,15 @@ const TRANSLATIONS = {
     next: "Next",
     back: "Back",
     name: "Name",
+    gender: "Gender",
+    age: "Age",
     role: "Role",
     personality: "Personality",
     speakingStyle: "Style",
     visual: "Visual",
     yourCue: "Your Cue",
     directorNote: "Director's Note",
-    aiComplete: "AI Complete",
+    aiComplete: "AI Auto-Complete",
     directorMode: "God Mode",
     directorPlaceholder: "Enter command e.g., 'Power outage'",
     inject: "Inject",
@@ -213,6 +233,19 @@ const TRANSLATIONS = {
     skipChapter: "Next Chapter",
     chapter: "Chapter",
     chapterGoal: "Goal",
+    createCharacter: "Create Character",
+    editCharacter: "Edit Character",
+    uploadAvatar: "Upload Avatar",
+    genAvatar: "AI Avatar",
+    aiFill: "✨ Magic Fill",
+    chatWith: "Chat",
+    selectCharacters: "Select Cast (Optional)",
+    memories: "Memories",
+    memoriesHint: "AI generates memories from chats and optimizes personality.",
+    savingMemories: "Saving memories & evolving character...",
+    memorySaved: "Character Evolved! Memory Saved.",
+    enterNameHint: "Enter name (e.g. Sherlock Holmes)",
+    autoFillLoading: "Crafting profile...",
   }
 };
 
@@ -249,12 +282,12 @@ const Button = ({
   );
 };
 
-const Avatar = ({ url, name, size = 'md' }: { url?: string, name: string, size?: 'sm' | 'md' | 'lg' | 'xl' }) => {
-  const sizeClasses = { sm: "w-8 h-8 text-xs", md: "w-12 h-12 text-sm", lg: "w-24 h-24 text-lg", xl: "w-48 h-48 text-2xl" };
-  if (url) return <img src={url} alt={name} className={`${sizeClasses[size]} rounded-full object-cover border-2 border-zinc-700 shadow-md flex-shrink-0 bg-zinc-800`} />;
+const Avatar = ({ url, name, size = 'md' }: { url?: string, name: string, size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' }) => {
+  const sizeClasses = { sm: "w-8 h-8 text-xs", md: "w-12 h-12 text-sm", lg: "w-24 h-24 text-lg", xl: "w-48 h-48 text-2xl", '2xl': "w-64 h-64 text-4xl" };
+  if (url) return <img src={url} alt={name} className={`${sizeClasses[size]} rounded-full object-cover border-4 border-zinc-700 shadow-xl flex-shrink-0 bg-zinc-800`} />;
   return (
-    <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center border-2 border-zinc-700 shadow-md text-zinc-400 font-bold select-none flex-shrink-0`}>
-      {name.substring(0, 2).toUpperCase()}
+    <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center border-4 border-zinc-700 shadow-xl text-zinc-400 font-bold select-none flex-shrink-0`}>
+      {name ? name.substring(0, 2).toUpperCase() : '?'}
     </div>
   );
 };
@@ -297,19 +330,36 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('skena_settings');
-    // Default to GEMINI if not set
     return saved ? JSON.parse(saved) : { apiKey: '', activeProvider: 'GEMINI' };
   });
 
   // --- App View State ---
-  const [view, setView] = useState<'DASHBOARD' | 'EDITOR' | 'STAGE'>('DASHBOARD');
+  const [view, setView] = useState<'DASHBOARD' | 'EDITOR' | 'STAGE' | 'CHAT'>('DASHBOARD');
   const [editorStep, setEditorStep] = useState<1 | 2>(1);
-  const [dashboardTab, setDashboardTab] = useState<'SCRIPTS' | 'TEMPLATES' | 'COMMUNITY' | 'ACHIEVEMENTS'>('SCRIPTS');
+  // Default to CHARACTERS based on user feedback to make it more prominent
+  const [dashboardTab, setDashboardTab] = useState<'SCRIPTS' | 'TEMPLATES' | 'CHARACTERS' | 'COMMUNITY' | 'ACHIEVEMENTS'>('CHARACTERS');
   const [scripts, setScripts] = useState<Script[]>([]);
+  const [globalCharacters, setGlobalCharacters] = useState<GlobalCharacter[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>(() => {
     const saved = localStorage.getItem('skena_achievements');
     return saved ? JSON.parse(saved) : INITIAL_ACHIEVEMENTS;
   });
+
+  // --- Selection State for New Script ---
+  const [selectedCastIds, setSelectedCastIds] = useState<string[]>([]);
+  const [showCastSelector, setShowCastSelector] = useState(false);
+
+  // --- Character Editor Modal State ---
+  const [editingChar, setEditingChar] = useState<Partial<GlobalCharacter> | null>(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+  const [isCharAutoFilling, setIsCharAutoFilling] = useState(false);
+  const [isAvatarGenerating, setIsAvatarGenerating] = useState(false);
+
+  // --- Chat State ---
+  const [activeChatSession, setActiveChatSession] = useState<ChatSession | null>(null);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
+  const [sessionUpdated, setSessionUpdated] = useState(false); // Track if we need to summarize on exit
 
   const [currentScript, setCurrentScript] = useState<Script | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -326,16 +376,18 @@ export default function App() {
   const directorQueueRef = useRef<string[]>([]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const companionChatEndRef = useRef<HTMLDivElement>(null);
   const [notification, setNotification] = useState<{title: string, msg: string, type?: 'error' | 'success'} | null>(null);
 
   const t = TRANSLATIONS[lang];
 
-  // --- Auth Effects ---
+  // --- Auth & Data Loading Effects ---
   useEffect(() => {
     const user = authService.getCurrentUser();
     if (user) {
       setCurrentUser(user);
       setScripts(authService.getScripts(user.id));
+      setGlobalCharacters(authService.getGlobalCharacters(user.id));
     }
   }, []);
 
@@ -346,90 +398,93 @@ export default function App() {
   }, [scripts, currentUser]);
 
   useEffect(() => {
+    if (currentUser) {
+      authService.saveGlobalCharacters(currentUser.id, globalCharacters);
+    }
+  }, [globalCharacters, currentUser]);
+
+  useEffect(() => {
     if (view === 'STAGE' && chatEndRef.current) {
         chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [currentScript?.history, view]);
 
-  // --- Game Loop ---
+  useEffect(() => {
+    if (view === 'CHAT' && companionChatEndRef.current) {
+        companionChatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeChatSession?.messages, view]);
+
+  // --- Game Loop (OPTIMIZED) ---
   useEffect(() => {
     if (!currentScript || view !== 'STAGE') return;
-    if (!isPlaying && !turnProcessing && !isReconstructing) {
-       // Just a guard
-    }
+    if (!isPlaying && !turnProcessing && !isReconstructing) { /* Idle */ }
     if (turnProcessing || isReconstructing || !isPlaying) return;
 
     const gameLoop = async () => {
       setTurnProcessing(true);
       try {
-        // Default Key now handled in aiService, so we don't throw here if empty
-        
-        // CHECK DIRECTOR QUEUE (God Mode Logic)
+        // God Mode Check
         let forcedCommand = null;
         if (directorQueueRef.current.length > 0) {
             forcedCommand = directorQueueRef.current.shift() || null;
-            
-            // IF COMMAND EXISTS: Trigger Butterfly Effect
             if (forcedCommand) {
                 setIsPlaying(false);
                 setIsReconstructing(true);
-                
-                // 1. Regenerate Future Plot
                 const newPlot = await regenerateFuturePlot(currentScript, forcedCommand, appSettings);
                 updateScriptState({ ...currentScript, plotPoints: newPlot });
-                
-                // 2. Inject command into history
                 const dirMsg: Message = {
                     id: crypto.randomUUID(), characterId: 'narrator', content: `[SYSTEM OVERRIDE]: ${forcedCommand}`, type: 'narration', timestamp: Date.now()
                 };
                 handleUpdateScriptHistory(dirMsg);
-
-                // 3. Resume
                 setIsReconstructing(false);
-                setIsPlaying(true); // Restart loop to handle reaction
+                setIsPlaying(true);
                 setTurnProcessing(false);
-                return; // Exit this loop iteration to allow state to settle
+                return;
             }
         }
 
-        // Get Current Plot Target
         const currentPlotIndex = currentScript.currentPlotIndex || 0;
         const targetPlot = currentScript.plotPoints[currentPlotIndex] || currentScript.plotPoints[currentScript.plotPoints.length - 1];
 
+        // 1. Generate Text (Fast)
         const nextBeat = await generateNextBeat(currentScript, forcedCommand, targetPlot, lang, appSettings);
         
-        let imageUrl = undefined;
-        if (nextBeat.type === 'narration') {
-            try {
-                imageUrl = await generateSceneImage(nextBeat.content, currentScript.title, appSettings);
-            } catch (err) {
-                // Ignore image fail
-            }
-        }
-
+        // 2. Add Message Immediately
         const newMessage: Message = {
           id: crypto.randomUUID(), characterId: nextBeat.characterId,
-          content: nextBeat.content, type: nextBeat.type, timestamp: Date.now(),
-          imageUrl: imageUrl
+          content: nextBeat.content, type: nextBeat.type, timestamp: Date.now()
         };
         handleUpdateScriptHistory(newMessage);
+
+        // 3. Generate Image Asynchronously (Non-blocking) if narration
+        if (nextBeat.type === 'narration') {
+            generateSceneImage(nextBeat.content, currentScript.title, appSettings).then(url => {
+                 setScripts(prev => prev.map(s => {
+                     if (s.id === currentScript.id) {
+                         const updatedHistory = s.history.map(m => m.id === newMessage.id ? { ...m, imageUrl: url } : m);
+                         const updatedScript = { ...s, history: updatedHistory };
+                         if (currentScript.id === s.id) setCurrentScript(updatedScript); // update active state if match
+                         return updatedScript;
+                     }
+                     return s;
+                 }));
+            }).catch(() => {});
+        }
 
       } catch (e: any) {
         console.error("Game loop error", e);
         setIsPlaying(false);
-        if (e.message?.includes("API Key")) {
-            showNotification("Config Error", t.noKey, 'error');
-            setShowSettings(true);
-        }
       } finally {
         setTurnProcessing(false);
       }
     };
     
-    // Faster loop for openrouter/general responsiveness (1000ms instead of 1500ms)
-    const timer = setTimeout(gameLoop, 1000);
+    // Aggressive loop speed for responsiveness
+    const timer = setTimeout(gameLoop, 500);
     return () => clearTimeout(timer);
   }, [isPlaying, currentScript, view, turnProcessing, lang, appSettings, isReconstructing]);
+
 
   // --- Handlers ---
 
@@ -441,6 +496,7 @@ export default function App() {
       else user = authService.register(authInput);
       setCurrentUser(user);
       setScripts(authService.getScripts(user.id));
+      setGlobalCharacters(authService.getGlobalCharacters(user.id));
       setAuthInput('');
     } catch (e: any) {
       showNotification("Auth Error", e.message, 'error');
@@ -451,6 +507,7 @@ export default function App() {
     authService.logout();
     setCurrentUser(null);
     setScripts([]);
+    setGlobalCharacters([]);
     setView('DASHBOARD');
   };
 
@@ -485,13 +542,213 @@ export default function App() {
     });
   };
 
-  // Modified to trigger avatar generation automatically
+  // --- Global Character Management ---
+
+  const openNewCharacterModal = () => {
+      setEditingChar({
+          id: crypto.randomUUID(),
+          name: '', gender: '', age: '', personality: '', speakingStyle: '', visualDescription: '',
+          avatarUrl: '', memories: []
+      });
+      setShowCharModal(true);
+  };
+
+  const handleEditCharacter = (char: GlobalCharacter) => {
+      setEditingChar({ ...char });
+      setShowCharModal(true);
+  };
+
+  const handleSaveGlobalCharacter = async () => {
+      if (!editingChar || !editingChar.name || !currentUser) return;
+      
+      const newChar: GlobalCharacter = {
+          id: editingChar.id || crypto.randomUUID(),
+          ownerId: currentUser.id,
+          name: editingChar.name,
+          gender: editingChar.gender || "Unknown",
+          age: editingChar.age || "Unknown",
+          personality: editingChar.personality || "Neutral",
+          speakingStyle: editingChar.speakingStyle || "Normal",
+          visualDescription: editingChar.visualDescription || "A person",
+          avatarUrl: editingChar.avatarUrl,
+          createdAt: Date.now(),
+          memories: editingChar.memories || []
+      };
+
+      // Check if updating
+      const exists = globalCharacters.find(c => c.id === newChar.id);
+      if (exists) {
+          setGlobalCharacters(prev => prev.map(c => c.id === newChar.id ? newChar : c));
+      } else {
+          setGlobalCharacters(prev => [...prev, newChar]);
+      }
+      
+      // Generate avatar if missing
+      if (!newChar.avatarUrl) {
+          try {
+             const url = await generateAvatarImage(newChar, appSettings);
+             setGlobalCharacters(prev => prev.map(c => c.id === newChar.id ? { ...c, avatarUrl: url } : c));
+          } catch(e) {}
+      }
+
+      setShowCharModal(false);
+      setEditingChar(null);
+  };
+
+  const handleAICompleteChar = async () => {
+      if (!editingChar || !editingChar.name) {
+          showNotification("Hint", "Please enter a name first!", "error");
+          return;
+      }
+      setIsCharAutoFilling(true);
+      try {
+          const filled = await completeCharacterProfile(editingChar, appSettings);
+          setEditingChar(filled);
+      } catch (e) {
+          showNotification("AI Error", "Failed to autocomplete", 'error');
+      } finally {
+          setIsCharAutoFilling(false);
+      }
+  };
+
+  const handleCharacterAvatarGen = async () => {
+      if (!editingChar || !editingChar.visualDescription) return;
+      setIsAvatarGenerating(true);
+      try {
+          // Temporarily construct a Character-like object
+          const tempChar: any = { ...editingChar };
+          const url = await generateAvatarImage(tempChar, appSettings);
+          setEditingChar(prev => ({...prev, avatarUrl: url}));
+      } catch (e) {
+          showNotification("Error", "Avatar generation failed", 'error');
+      } finally {
+          setIsAvatarGenerating(false);
+      }
+  }
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && editingChar) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setEditingChar({ ...editingChar, avatarUrl: reader.result as string });
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  // --- Companion Chat ---
+  
+  const handleOpenChat = (char: GlobalCharacter) => {
+      if (!currentUser) return;
+      let session = authService.getChatSession(currentUser.id, char.id);
+      if (!session) {
+          session = {
+              id: crypto.randomUUID(),
+              userId: currentUser.id,
+              characterId: char.id,
+              messages: [],
+              lastUpdated: Date.now()
+          };
+      }
+      setActiveChatSession(session);
+      setSessionUpdated(false);
+      setView('CHAT');
+  };
+  
+  const handleExitChat = async () => {
+      if (!activeChatSession || !currentUser) {
+          setView('DASHBOARD');
+          return;
+      }
+
+      // If we had a conversation, let's optimize the character!
+      if (sessionUpdated && activeChatSession.messages.length > 2) {
+          const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
+          if (char) {
+              showNotification(t.memories, t.savingMemories, 'success');
+              try {
+                  const evolution = await evolveCharacterFromChat(char, activeChatSession.messages, appSettings);
+                  
+                  const updatedChar: GlobalCharacter = {
+                      ...char,
+                      personality: evolution.newPersonality,
+                      speakingStyle: evolution.newSpeakingStyle,
+                      memories: evolution.memory ? [...(char.memories || []), evolution.memory] : char.memories
+                  };
+                  
+                  // Update global chars
+                  setGlobalCharacters(prev => prev.map(c => c.id === updatedChar.id ? updatedChar : c));
+                  showNotification(t.memories, t.memorySaved, 'success');
+              } catch (e) {
+                  console.error("Failed to evolve character", e);
+              }
+          }
+      }
+
+      setView('DASHBOARD');
+  };
+
+  const handleSendChatMessage = async () => {
+      if (!activeChatSession || !chatInput.trim() || !currentUser) return;
+      
+      const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
+      if (!char) return;
+
+      const userMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: chatInput,
+          timestamp: Date.now()
+      };
+
+      const updatedSession = {
+          ...activeChatSession,
+          messages: [...activeChatSession.messages, userMsg],
+          lastUpdated: Date.now()
+      };
+      setActiveChatSession(updatedSession);
+      setSessionUpdated(true);
+      setChatInput('');
+      setIsChatting(true);
+
+      try {
+          const responseText = await chatWithCharacter(char, updatedSession.messages, userMsg.content, appSettings);
+          const aiMsg: ChatMessage = {
+              id: crypto.randomUUID(),
+              role: 'model',
+              content: responseText,
+              timestamp: Date.now()
+          };
+          
+          const finalSession = {
+              ...updatedSession,
+              messages: [...updatedSession.messages, aiMsg],
+              lastUpdated: Date.now()
+          };
+          setActiveChatSession(finalSession);
+          authService.saveChatSession(finalSession);
+      } catch (e) {
+          showNotification("Chat Error", "Failed to get response", 'error');
+      } finally {
+          setIsChatting(false);
+      }
+  };
+
+  // --- Script Gen Logic ---
+
   const handleCreateScript = async () => {
     if (!currentUser) return;
     if (!promptInput.trim()) return;
     setIsGenerating(true);
+    setShowCastSelector(false); // Close dropdown if open
+    
     try {
-      const blueprint = await generateScriptBlueprint(promptInput, lang, appSettings);
+      // Find selected global chars
+      const cast = globalCharacters.filter(c => selectedCastIds.includes(c.id));
+      
+      const blueprint = await generateScriptBlueprint(promptInput, cast, lang, appSettings);
+      
       const newScript: Script = {
         id: crypto.randomUUID(),
         ownerId: currentUser.id,
@@ -517,10 +774,12 @@ export default function App() {
       setView('EDITOR');
       setEditorStep(1);
       setPromptInput('');
+      setSelectedCastIds([]);
       
-      // Auto-generate avatars for all characters
-      showNotification("Magic", t.autoAvatarGen);
-      newScript.characters.forEach(c => handleGenerateAvatar(c, newScript.id));
+      // Auto-generate avatars only for non-global chars (global chars already have avatars)
+      newScript.characters.forEach(c => {
+          if (!c.isGlobal) handleGenerateAvatar(c, newScript.id);
+      });
 
     } catch (e: any) {
       showNotification("Error", "Failed to generate scenario. Check API Key.", "error");
@@ -530,40 +789,16 @@ export default function App() {
     }
   };
 
-  const handleCreateTemplate = () => {
-    if (!currentUser) return;
-    const newTemplate: Script = {
-      id: crypto.randomUUID(), ownerId: currentUser.id, title: "新模版", premise: "", setting: "", plotPoints: [], possibleEndings: [], characters: [],
-      history: [], currentPlotIndex: 0, lastUpdated: Date.now(), isTemplate: true, author: currentUser.username
-    };
-    setScripts(prev => [newTemplate, ...prev]);
-    setCurrentScript(newTemplate);
-    setView('EDITOR'); setEditorStep(1); setDashboardTab('TEMPLATES');
-  };
-
-  const handleDirectorMessage = () => {
-    if (!directorInput.trim() || !currentScript) return;
-    directorQueueRef.current.push(directorInput);
-    setDirectorInput('');
-    // Ensure play is active to process the command
-    if (!isPlaying) setIsPlaying(true);
-  };
-
   const handleGenerateAvatar = async (char: Character, scriptId?: string) => {
-    // If scriptId is provided, we might be in background mode, so we update the script in the main list
-    // Otherwise we use currentScript
     const targetScript = scriptId ? scripts.find(s => s.id === scriptId) : currentScript;
     if (!targetScript) return;
     
     try {
       const url = await generateAvatarImage(char, appSettings);
-      
-      // Update logic handled differently if we are updating state vs just list
       if (currentScript && currentScript.id === targetScript.id) {
           const updatedChars = currentScript.characters.map(c => c.id === char.id ? { ...c, avatarUrl: url } : c);
           updateScriptState({ ...currentScript, characters: updatedChars });
       } else {
-          // Background update for non-active script
           setScripts(prev => prev.map(s => {
               if (s.id === targetScript.id) {
                   return { ...s, characters: s.characters.map(c => c.id === char.id ? { ...c, avatarUrl: url } : c) };
@@ -571,24 +806,37 @@ export default function App() {
               return s;
           }));
       }
-    } catch (e: any) {
-      // Silent fail or simple log for background tasks to avoid spam
-      console.warn("Avatar gen failed for", char.name);
-    }
+    } catch (e: any) { console.warn("Avatar gen failed for", char.name); }
   };
 
   const handleAiAddCharacter = async () => {
       if (!currentScript) return;
       try {
           const newChar = await generateSingleCharacter(currentScript, appSettings);
-          // Auto gen avatar for new char
-          const scriptId = currentScript.id;
-          handleGenerateAvatar(newChar, scriptId);
-          
+          handleGenerateAvatar(newChar, currentScript.id);
           updateScriptState({...currentScript, characters: [...currentScript.characters, newChar]});
       } catch (e) {
           showNotification("Error", "Failed to create character", "error");
       }
+  };
+  
+  const handleImportGlobalCharacter = (globalChar: GlobalCharacter) => {
+      if (!currentScript) return;
+      const newChar: Character = {
+          id: crypto.randomUUID(),
+          name: globalChar.name,
+          role: "Extra", // Default role, user can edit
+          personality: globalChar.personality,
+          speakingStyle: globalChar.speakingStyle,
+          visualDescription: globalChar.visualDescription,
+          avatarUrl: globalChar.avatarUrl,
+          gender: globalChar.gender,
+          age: globalChar.age,
+          isUserControlled: false,
+          isGlobal: true,
+          globalId: globalChar.id
+      };
+      updateScriptState({...currentScript, characters: [...currentScript.characters, newChar]});
   };
 
   const handleRefine = async (text: string, fieldType: string, callback: (newText: string) => void) => {
@@ -596,9 +844,7 @@ export default function App() {
     try {
       const refined = await refineText(text, fieldType, currentScript, lang, appSettings);
       callback(refined);
-    } catch (e) {
-      console.error("Refine failed", e);
-    }
+    } catch (e) { console.error("Refine failed", e); }
   };
 
   const handleRefinePlotPoint = async (index: number) => {
@@ -611,30 +857,22 @@ export default function App() {
       });
   };
 
+  const handleDirectorMessage = () => {
+    if (!directorInput.trim() || !currentScript) return;
+    directorQueueRef.current.push(directorInput);
+    setDirectorInput('');
+    if (!isPlaying) setIsPlaying(true);
+  };
+
   const handleNextChapter = () => {
     if (!currentScript) return;
     const currentIndex = currentScript.currentPlotIndex || 0;
     if (currentIndex >= currentScript.plotPoints.length - 1) return;
-
     const newIndex = currentIndex + 1;
     const nextPlot = currentScript.plotPoints[newIndex];
-    
-    updateScriptState({
-        ...currentScript,
-        currentPlotIndex: newIndex
-    });
-    
-    // Inject system message about chapter change
-    const newMessage: Message = {
-        id: crypto.randomUUID(),
-        characterId: 'narrator',
-        content: `>>> ${t.chapter} ${newIndex + 1}: ${nextPlot}`,
-        type: 'narration',
-        timestamp: Date.now()
-    };
+    updateScriptState({ ...currentScript, currentPlotIndex: newIndex });
+    const newMessage: Message = { id: crypto.randomUUID(), characterId: 'narrator', content: `>>> ${t.chapter} ${newIndex + 1}: ${nextPlot}`, type: 'narration', timestamp: Date.now() };
     handleUpdateScriptHistory(newMessage);
-    
-    // Resume play if paused
     if (!isPlaying) setIsPlaying(true);
   };
 
@@ -690,25 +928,50 @@ export default function App() {
         </div>
       </header>
 
+      {dashboardTab === 'SCRIPTS' && (
       <section className="w-full max-w-4xl px-6 pt-8 pb-16 text-center z-10 flex flex-col items-center">
         <h1 className="text-5xl md:text-6xl font-black text-white mb-6 leading-tight tracking-tight drop-shadow-2xl">{t.heroTitle}</h1>
         <p className="text-lg md:text-xl text-zinc-400 mb-10 max-w-2xl leading-relaxed">{t.heroSubtitle}</p>
-        <div className="w-full max-w-2xl relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-          <div className="relative flex items-center bg-zinc-900/80 backdrop-blur-xl border border-zinc-700/50 rounded-2xl p-2 shadow-2xl transition-all group-hover:border-indigo-500/50">
-            <Sparkles className="text-indigo-400 ml-4 mr-2" />
-            <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateScript()} placeholder={t.placeholder} className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-zinc-500 h-12" />
-            <Button onClick={handleCreateScript} disabled={isGenerating || !promptInput} size="md" className="rounded-xl px-6 shadow-none">
-              {isGenerating ? t.dreaming : t.create}
-            </Button>
+        <div className="w-full max-w-2xl relative">
+          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-20 transition duration-1000"></div>
+          <div className="relative flex flex-col bg-zinc-900/90 backdrop-blur-xl border border-zinc-700/50 rounded-2xl shadow-2xl overflow-hidden">
+             {/* Input Area */}
+             <div className="flex items-center p-2">
+                <Sparkles className="text-indigo-400 ml-4 mr-2" />
+                <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateScript()} placeholder={t.placeholder} className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-zinc-500 h-12" />
+                <Button onClick={handleCreateScript} disabled={isGenerating || !promptInput} size="md" className="rounded-xl px-6 shadow-none">
+                {isGenerating ? t.dreaming : t.create}
+                </Button>
+             </div>
+             {/* Character Selection */}
+             <div className="px-4 pb-2 flex justify-start">
+                 <button onClick={() => setShowCastSelector(!showCastSelector)} className="text-xs font-bold text-zinc-500 flex items-center gap-2 hover:text-indigo-400 transition-colors pb-2">
+                     <Users size={12} /> {t.selectCharacters} {selectedCastIds.length > 0 && `(${selectedCastIds.length})`}
+                 </button>
+             </div>
+             {showCastSelector && (
+                 <div className="bg-zinc-950/50 border-t border-zinc-800 p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 animate-fade-in max-h-40 overflow-y-auto">
+                     {globalCharacters.map(c => (
+                         <div key={c.id} onClick={() => {
+                             if(selectedCastIds.includes(c.id)) setSelectedCastIds(prev => prev.filter(id => id !== c.id));
+                             else setSelectedCastIds(prev => [...prev, c.id]);
+                         }} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${selectedCastIds.includes(c.id) ? 'bg-indigo-900/30 border-indigo-500/50' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>
+                             <Avatar name={c.name} url={c.avatarUrl} size="sm" />
+                             <span className="text-xs truncate font-medium text-zinc-300">{c.name}</span>
+                         </div>
+                     ))}
+                     {globalCharacters.length === 0 && <span className="text-zinc-500 text-xs col-span-full">No characters created yet. Go to Characters tab.</span>}
+                 </div>
+             )}
           </div>
         </div>
       </section>
+      )}
 
-      <main className="w-full max-w-6xl px-6 pb-20 z-10 flex-1">
+      <main className="w-full max-w-6xl px-6 pb-20 z-10 flex-1 mt-8">
         <div className="flex justify-center mb-10">
           <div className="flex bg-zinc-900/80 backdrop-blur p-1 rounded-full border border-zinc-800">
-            {[ { id: 'SCRIPTS', label: t.myScripts, icon: Film }, { id: 'TEMPLATES', label: t.templates, icon: BookOpen }, { id: 'ACHIEVEMENTS', label: t.achievements, icon: Trophy } ].map(tab => (
+            {[ { id: 'CHARACTERS', label: t.characters, icon: Users }, { id: 'SCRIPTS', label: t.myScripts, icon: Film }, { id: 'TEMPLATES', label: t.templates, icon: BookOpen }, { id: 'ACHIEVEMENTS', label: t.achievements, icon: Trophy } ].map(tab => (
               <button key={tab.id} onClick={() => setDashboardTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all text-sm font-bold ${dashboardTab === tab.id ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
                 <tab.icon size={14} /> {tab.label}
               </button>
@@ -735,7 +998,44 @@ export default function App() {
               ))}
             </div>
           )}
-          {dashboardTab === 'TEMPLATES' && <div className="text-center py-20 text-zinc-500"><Button onClick={handleCreateTemplate} icon={Plus} variant="primary">{t.createTemplate}</Button></div>}
+          {dashboardTab === 'CHARACTERS' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {/* Create New Card */}
+                  <div onClick={openNewCharacterModal} className="cursor-pointer bg-gradient-to-br from-indigo-900/20 to-zinc-900 border border-indigo-500/30 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 hover:bg-indigo-900/30 transition-all group min-h-[300px]">
+                      <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                          <Plus size={32} className="text-indigo-400" />
+                      </div>
+                      <h3 className="text-xl font-bold text-white group-hover:text-indigo-300">{t.createCharacter}</h3>
+                      <p className="text-zinc-500 text-sm mt-2 text-center">Design a new persona with AI magic</p>
+                  </div>
+
+                  {globalCharacters.map(char => (
+                      <div key={char.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-indigo-500/50 hover:shadow-xl transition-all group flex flex-col relative min-h-[300px]">
+                          <div className="flex justify-center -mt-10 mb-4">
+                              <Avatar name={char.name} url={char.avatarUrl} size="xl" />
+                          </div>
+                          <div className="text-center mb-4 flex-1">
+                              <h3 className="font-bold text-white text-xl mb-1">{char.name}</h3>
+                              <p className="text-xs text-indigo-400 font-bold uppercase tracking-wider mb-2">Character</p>
+                              <div className="flex justify-center gap-2 mb-3">
+                                  <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.gender}</span>
+                                  <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.age}</span>
+                              </div>
+                              <p className="text-sm text-zinc-500 line-clamp-3 italic">"{char.personality}"</p>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 mt-auto">
+                              <Button size="sm" variant="secondary" className="text-xs" onClick={() => handleEditCharacter(char)} icon={Edit3}>{t.editCharacter}</Button>
+                              <Button size="sm" variant="primary" className="text-xs" onClick={() => handleOpenChat(char)} icon={MessageSquare}>{t.chatWith}</Button>
+                          </div>
+                          <button className="absolute top-4 right-4 text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setGlobalCharacters(p => p.filter(c => c.id !== char.id)); }}>
+                             <Trash2 size={16}/>
+                          </button>
+                      </div>
+                  ))}
+              </div>
+          )}
+          {dashboardTab === 'TEMPLATES' && <div className="text-center py-20 text-zinc-500"><Button onClick={() => {}} icon={Plus} variant="secondary">Use Script as Template</Button></div>}
           {dashboardTab === 'ACHIEVEMENTS' && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {(achievements || []).map(ach => (
@@ -750,6 +1050,183 @@ export default function App() {
       </main>
     </div>
   );
+
+  const renderCharacterModal = () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col h-[85vh]">
+              {/* Header */}
+              <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-800/50">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Sparkles size={20} className="text-indigo-400"/> 
+                      {editingChar?.id && globalCharacters.find(c => c.id === editingChar.id) ? t.editCharacter : t.createCharacter}
+                  </h2>
+                  <button onClick={() => setShowCharModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                  
+                  {/* Left Column: Visuals */}
+                  <div className="w-full md:w-1/3 bg-zinc-950 p-8 flex flex-col items-center border-r border-zinc-800 overflow-y-auto">
+                      <div className="relative group">
+                          <Avatar name={editingChar?.name || "?"} url={editingChar?.avatarUrl} size="2xl" />
+                          <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                              <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full text-xs font-bold backdrop-blur flex items-center gap-2">
+                                  <Upload size={14}/> {t.uploadAvatar}
+                                  <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} />
+                              </label>
+                              <button onClick={handleCharacterAvatarGen} disabled={isAvatarGenerating || !editingChar?.visualDescription} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                  {isAvatarGenerating ? <RefreshCw size={14} className="animate-spin"/> : <Wand2 size={14}/>} {t.genAvatar}
+                              </button>
+                          </div>
+                      </div>
+                      <p className="text-zinc-500 text-xs mt-4 text-center px-4">
+                          Upload an image or use AI to generate one based on the visual description.
+                      </p>
+                  </div>
+
+                  {/* Right Column: Data Form */}
+                  <div className="w-full md:w-2/3 p-8 overflow-y-auto space-y-6 bg-zinc-900/50">
+                      
+                      {/* Name & Magic Fill */}
+                      <div>
+                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.name}</label>
+                          <div className="flex gap-2">
+                              <input 
+                                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-lg text-white placeholder-zinc-600 focus:border-indigo-500 outline-none transition-all" 
+                                  value={editingChar?.name || ''} 
+                                  onChange={e => setEditingChar(p => ({...p!, name: e.target.value}))} 
+                                  placeholder={t.enterNameHint}
+                              />
+                              <Button 
+                                  onClick={handleAICompleteChar} 
+                                  disabled={!editingChar?.name || isCharAutoFilling}
+                                  variant="primary" 
+                                  className="whitespace-nowrap shadow-indigo-500/20"
+                                  icon={isCharAutoFilling ? RefreshCw : Sparkles}
+                              >
+                                  {isCharAutoFilling ? t.autoFillLoading : t.aiFill}
+                              </Button>
+                          </div>
+                          <p className="text-[10px] text-zinc-500 mt-2 ml-1">
+                              Tip: Enter a famous name (e.g. "Sherlock Holmes") and click Magic Fill to auto-generate the profile!
+                          </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                          <div>
+                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.gender}</label>
+                              <input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.gender || ''} onChange={e => setEditingChar(p => ({...p!, gender: e.target.value}))} />
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.age}</label>
+                              <input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.age || ''} onChange={e => setEditingChar(p => ({...p!, age: e.target.value}))} />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.personality}</label>
+                          <textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[80px]" rows={3} value={editingChar?.personality || ''} onChange={e => setEditingChar(p => ({...p!, personality: e.target.value}))} />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.speakingStyle}</label>
+                              <textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.speakingStyle || ''} onChange={e => setEditingChar(p => ({...p!, speakingStyle: e.target.value}))} />
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.visual}</label>
+                              <textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.visualDescription || ''} onChange={e => setEditingChar(p => ({...p!, visualDescription: e.target.value}))} />
+                          </div>
+                      </div>
+                      
+                      {/* Memories Section */}
+                      {editingChar?.memories && editingChar.memories.length > 0 && (
+                          <div className="border-t border-zinc-800 pt-6">
+                               <label className="text-xs font-bold text-indigo-400 uppercase block mb-3 flex items-center gap-2">
+                                   <BrainCircuit size={14}/> {t.memories}
+                               </label>
+                               <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 space-y-2 max-h-32 overflow-y-auto">
+                                   {editingChar.memories.map((m, idx) => (
+                                       <div key={idx} className="text-xs text-zinc-400 flex gap-2">
+                                           <span className="text-indigo-500">•</span> {m}
+                                       </div>
+                                   ))}
+                               </div>
+                          </div>
+                      )}
+
+                  </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-zinc-800 bg-zinc-900 flex justify-end gap-4">
+                  <Button variant="secondary" onClick={() => setShowCharModal(false)}>{t.close}</Button>
+                  <Button variant="primary" onClick={handleSaveGlobalCharacter} icon={Save} className="px-8">{t.saveSettings}</Button>
+              </div>
+          </div>
+      </div>
+  );
+
+  const renderChatInterface = () => {
+      if (!activeChatSession) return null;
+      const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
+      
+      return (
+          <div className="h-screen flex flex-col bg-zinc-950">
+              <header className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                      <Button variant="ghost" onClick={handleExitChat} icon={ChevronLeft}>{t.back}</Button>
+                      <div className="flex items-center gap-3">
+                          <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="md" />
+                          <div>
+                              <h2 className="font-bold text-white">{char?.name}</h2>
+                              <div className="flex items-center gap-1.5 text-xs text-green-400"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> Online</div>
+                          </div>
+                      </div>
+                  </div>
+              </header>
+              <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+                  {activeChatSession.messages.map(msg => (
+                      <div key={msg.id} className={`flex gap-4 max-w-3xl ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
+                          <div className={`flex-shrink-0 ${msg.role === 'user' ? 'mt-1' : ''}`}>
+                               {msg.role === 'user' ? 
+                                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white">{currentUser?.username.substring(0,2).toUpperCase()}</div> :
+                                <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="md" />
+                               }
+                          </div>
+                          <div className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-zinc-800 text-zinc-200 rounded-tl-none'}`}>
+                              {msg.content}
+                          </div>
+                      </div>
+                  ))}
+                  {isChatting && (
+                       <div className="flex gap-4 max-w-3xl mr-auto animate-pulse">
+                           <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="md" />
+                           <div className="bg-zinc-800 p-4 rounded-2xl rounded-tl-none text-zinc-500 flex items-center gap-1">
+                               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"></span>
+                               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce delay-75"></span>
+                               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce delay-150"></span>
+                           </div>
+                       </div>
+                  )}
+                  <div ref={companionChatEndRef} />
+              </main>
+              <footer className="p-4 bg-zinc-900 border-t border-zinc-800">
+                  <div className="max-w-4xl mx-auto flex gap-2">
+                      <input className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all" 
+                          placeholder="Type a message..." 
+                          value={chatInput} 
+                          onChange={e => setChatInput(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleSendChatMessage()}
+                          disabled={isChatting}
+                      />
+                      <Button onClick={handleSendChatMessage} disabled={!chatInput.trim() || isChatting} icon={Send} variant="primary" className="rounded-xl"></Button>
+                  </div>
+              </footer>
+          </div>
+      );
+  };
 
   const renderEditor = () => {
     if (!currentScript) return null;
@@ -814,6 +1291,19 @@ export default function App() {
                 <div className="flex gap-4">
                     <Button className="flex-1" variant="secondary" icon={Plus} onClick={() => updateScriptState({...currentScript, characters: [...currentScript.characters, { id: crypto.randomUUID(), name: "New Char", role: "Extra", personality: "Neutral", speakingStyle: "Normal", visualDescription: "...", isUserControlled: false }]})}>{t.addActor}</Button>
                     <Button className="flex-1 bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border-emerald-500/30 hover:border-emerald-500/50" icon={Sparkles} onClick={handleAiAddCharacter}>{t.aiAddActor}</Button>
+                    {globalCharacters.length > 0 && (
+                        <div className="relative group">
+                            <Button variant="secondary" icon={Users}>{t.importActor}</Button>
+                            <div className="absolute top-full mt-2 right-0 w-48 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl hidden group-hover:block z-50">
+                                {globalCharacters.map(c => (
+                                    <div key={c.id} onClick={() => handleImportGlobalCharacter(c)} className="p-3 hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300 flex items-center gap-2">
+                                        <Avatar name={c.name} url={c.avatarUrl} size="sm" />
+                                        {c.name}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
                 
                 <div className="grid grid-cols-1 gap-6">
@@ -821,12 +1311,13 @@ export default function App() {
                     <div key={char.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 flex gap-6 hover:shadow-xl transition-all">
                         <div className="flex flex-col items-center gap-3">
                             <Avatar name={char.name} url={char.avatarUrl} size="lg" />
-                            <Button size="sm" variant="secondary" onClick={() => handleGenerateAvatar(char)} className="text-xs px-2 py-1 h-8">{t.genLook}</Button>
+                            {!char.isGlobal && <Button size="sm" variant="secondary" onClick={() => handleGenerateAvatar(char)} className="text-xs px-2 py-1 h-8">{t.genLook}</Button>}
+                            {char.isGlobal && <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider border border-indigo-500/30 px-2 rounded-full">Linked</span>}
                         </div>
                         <div className="flex-1 grid grid-cols-2 gap-4">
                         <div className="col-span-1">
                             <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">{t.name}</label>
-                            <input className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white" value={char.name} onChange={e => { const chars = [...currentScript.characters]; chars[idx].name = e.target.value; updateScriptState({...currentScript, characters: chars}); }} />
+                            <input className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white" disabled={!!char.isGlobal} value={char.name} onChange={e => { const chars = [...currentScript.characters]; chars[idx].name = e.target.value; updateScriptState({...currentScript, characters: chars}); }} />
                         </div>
                         <div className="col-span-1">
                             <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">{t.role}</label>
@@ -879,257 +1370,214 @@ export default function App() {
         {isReconstructing && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
                 <div className="relative">
-                    <div className="absolute -inset-4 bg-indigo-500/20 rounded-full blur-xl animate-pulse"></div>
+                    <div className="absolute -inset-4 bg-indigo-500/30 rounded-full blur-xl animate-pulse"></div>
                     <Loader2 size={48} className="text-indigo-400 animate-spin relative z-10" />
                 </div>
-                <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 mt-6 tracking-tight">{t.reconstructing}</h2>
-                <p className="text-zinc-500 mt-2 font-mono text-sm">{t.commandQueued}</p>
+                <h3 className="text-white font-bold text-xl mt-6 tracking-widest uppercase">{t.reconstructing}</h3>
+                <p className="text-zinc-500 text-sm mt-2">{t.commandQueued}</p>
             </div>
         )}
 
-        <header className="flex-shrink-0 border-b border-zinc-800/50 flex flex-col bg-zinc-900/60 backdrop-blur-xl z-20 shadow-lg">
-          <div className="p-4 flex justify-between items-center">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }} className="hover:bg-white/10">{t.exit}</Button>
-                <div>
-                    <h1 className="font-bold text-zinc-100 text-lg tracking-tight drop-shadow-md flex items-center gap-2">
-                        {currentScript.title} 
-                        {appSettings.activeProvider === 'OPENROUTER' && <span className="text-[9px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-700">OPENROUTER</span>}
-                    </h1>
-                    <p className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold opacity-80">{t.liveStage}</p>
-                </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-                 {/* Chapter Skip */}
-                 {currentPlotIndex < totalPlots - 1 && (
-                     <Button 
-                        size="sm" 
-                        variant="secondary" 
-                        onClick={handleNextChapter} 
-                        icon={SkipForward}
-                        className="text-xs border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800"
-                    >
-                        {t.skipChapter}
-                    </Button>
-                 )}
+        {/* Header Overlay */}
+        <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
+             <div className="flex items-center gap-4">
+                 <Button variant="ghost" icon={ChevronLeft} onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }}>{t.exit}</Button>
+                 <div>
+                     <h2 className="text-white font-bold text-lg shadow-black drop-shadow-lg">{currentScript.title}</h2>
+                     <p className="text-zinc-400 text-xs flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div> {isPlaying ? t.onAir : t.paused}</p>
+                 </div>
+             </div>
+             <div className="flex gap-2">
+                 <Button size="sm" variant="secondary" icon={SkipForward} onClick={handleNextChapter}>{t.skipChapter}</Button>
+                 <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={isPlaying ? Pause : Play} onClick={() => setIsPlaying(!isPlaying)}>
+                     {isPlaying ? t.paused : t.resumeAuto}
+                 </Button>
+             </div>
+        </div>
 
-                <div className={`px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md transition-colors ${isPlaying ? 'bg-red-500/10 text-red-400 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/50'}`}>
-                <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-red-500 animate-pulse' : 'bg-zinc-600'}`} />{isPlaying ? t.onAir : t.paused}
-                </div>
-                {isPlaying ? 
-                    <Button onClick={() => setIsPlaying(false)} icon={Pause} variant="secondary" className="bg-zinc-800/80 backdrop-blur border-zinc-700 hover:bg-zinc-700">Pause</Button> : 
-                    <Button onClick={() => setIsPlaying(true)} icon={Play} variant="primary" className="shadow-indigo-500/20">Action</Button>
-                }
-            </div>
-          </div>
-          
-          {/* Progress Bar */}
-          <div className="w-full bg-zinc-800/30 h-1">
-             <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-1000" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="px-4 py-1 bg-black/20 text-[10px] text-zinc-500 font-mono flex justify-between">
-              <span>{t.chapter}: {currentPlotIndex + 1} / {totalPlots}</span>
-              <span className="truncate max-w-[50%] text-right opacity-70">{t.chapterGoal}: {currentScript.plotPoints[currentPlotIndex]}</span>
-          </div>
-        </header>
+        {/* Scene Background */}
+        <div className="absolute inset-0 bg-zinc-900">
+             {(() => {
+                 const lastImg = [...currentScript.history].reverse().find(m => m.imageUrl);
+                 if (lastImg && lastImg.imageUrl) {
+                     return <img src={lastImg.imageUrl} alt="Scene" className="w-full h-full object-cover opacity-50 transition-all duration-1000" />;
+                 }
+                 return <div className="w-full h-full flex items-center justify-center text-zinc-800 font-bold text-9xl select-none opacity-20">SCENE</div>
+             })()}
+             <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent"></div>
+        </div>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth z-10">
-          {(currentScript.history || []).map((msg, idx) => {
-            const char = currentScript.characters.find(c => c.id === msg.characterId);
-            const isUser = char?.isUserControlled;
-            const charColor = getCharacterColor(msg.characterId);
-            
-            // Narration Card (Scene / Story Progression)
-            if (msg.type === 'narration') {
-              return (
-                <div key={msg.id} className="flex flex-col items-center my-10 animate-slide-up w-full">
-                   <div className="relative max-w-3xl w-full">
-                     <div className="absolute top-1/2 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-amber-900/40 to-transparent"></div>
-                     <div className="relative z-10 mx-auto max-w-2xl text-center p-8 bg-zinc-950/90 backdrop-blur-md border border-amber-900/30 shadow-2xl rounded-sm">
-                       <div className="text-amber-500/70 text-xs font-bold uppercase tracking-[0.3em] mb-4 flex items-center justify-center gap-2">
-                          <span className="w-8 h-[1px] bg-amber-500/50"></span> SCENE <span className="w-8 h-[1px] bg-amber-500/50"></span>
-                       </div>
-                       <p className="text-amber-100/90 font-serif text-2xl leading-relaxed tracking-wide antialiased drop-shadow-sm">{msg.content}</p>
+        {/* Script Log */}
+        <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-20 space-y-6 mask-image-linear-gradient">
+             {currentScript.history.map((msg, idx) => {
+                 const char = currentScript.characters.find(c => c.id === msg.characterId);
+                 const isNarration = msg.type === 'narration' || msg.characterId === 'narrator';
+                 const isUser = char?.isUserControlled;
+                 
+                 return (
+                     <div key={msg.id} className={`flex flex-col max-w-4xl mx-auto animate-slide-up ${isNarration ? 'items-center text-center my-10' : (isUser ? 'items-end' : 'items-start')}`}>
+                         {!isNarration && (
+                             <div className={`flex items-center gap-2 mb-1 ${isUser ? 'flex-row-reverse' : ''}`}>
+                                 <span className="text-xs font-bold text-zinc-400">{char?.name}</span>
+                             </div>
+                         )}
+                         
+                         <div className={`
+                             ${isNarration 
+                               ? 'text-zinc-300 italic text-lg md:text-xl font-serif leading-relaxed max-w-2xl text-shadow-sm' 
+                               : `p-4 rounded-2xl max-w-lg text-md shadow-lg backdrop-blur-sm border border-white/5 ${isUser ? 'bg-indigo-600/80 text-white rounded-tr-none' : 'bg-zinc-800/80 text-zinc-100 rounded-tl-none'}`}
+                         `} style={{ borderColor: !isNarration && char ? getCharacterColor(char.id) + '40' : 'transparent' }}>
+                             {msg.content}
+                         </div>
                      </div>
-                   </div>
-                   {msg.imageUrl && (
-                       <div className="mt-6 rounded-lg overflow-hidden shadow-2xl border border-zinc-800/50 max-w-2xl w-full animate-fade-in ring-1 ring-white/5">
-                           <img src={msg.imageUrl} alt="Scene" className="w-full h-auto object-cover opacity-90 hover:opacity-100 transition-opacity duration-700" />
-                       </div>
-                   )}
-                </div>
-              );
-            }
-            
-            // Action Text (Distinct from Narration, subtle event)
-            if (msg.type === 'action') {
-                return (
-                    <div key={msg.id} className="flex gap-4 max-w-4xl mx-auto items-center justify-center animate-slide-up my-4 opacity-80 hover:opacity-100 transition-opacity">
-                        <div className="text-zinc-500 text-sm italic px-6 py-2 rounded-full bg-zinc-900/30 border border-zinc-800/30 flex items-center gap-2 backdrop-blur-sm">
-                             <span className="not-italic font-bold" style={{ color: charColor }}>{char?.name}</span> {msg.content}
-                        </div>
-                    </div>
-                );
-            }
+                 );
+             })}
+             
+             {turnProcessing && (
+                 <div className="flex justify-center my-8 animate-pulse">
+                     <span className="text-zinc-500 text-xs tracking-widest uppercase flex items-center gap-2">
+                         <Sparkles size={12} /> Directing...
+                     </span>
+                 </div>
+             )}
+             <div ref={chatEndRef} className="h-20" />
+        </div>
 
-            // Dialogue Bubble (IMPROVED UI for Distinction)
-            return (
-              <div key={msg.id} className={`flex gap-6 max-w-5xl mx-auto animate-slide-up ${isUser ? 'flex-row-reverse' : ''} group my-8`}>
-                <div className={`flex-shrink-0 mt-4 transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg rounded-full z-10 ${isUser ? 'order-1' : 'order-first'}`}>
-                    <div className={`rounded-full p-1`} style={{ background: `linear-gradient(135deg, ${charColor}20, #18181b)` }}>
-                        <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="lg" />
-                    </div>
-                </div>
-                
-                <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[85%] relative`}>
-                  {/* Distinct background box for speaker clarity */}
-                  <div className={`absolute -inset-4 rounded-xl -z-10 blur-xl opacity-0 transition-opacity group-hover:opacity-100 ${isUser ? 'bg-indigo-900/20' : 'bg-zinc-800/20'}`}></div>
-                  
-                  {/* Speaker Name Tag */}
-                  <span className={`text-[10px] mb-1.5 px-3 py-0.5 rounded-full font-bold tracking-widest uppercase border backdrop-blur-sm shadow-sm bg-zinc-950/80 border-zinc-800`} style={{ color: charColor }}>
-                    {char?.name} • {char?.role}
-                  </span>
-                  
-                  <div className={`
-                    relative px-8 py-6 shadow-2xl backdrop-blur-md border
-                    text-lg md:text-xl font-medium leading-relaxed tracking-wide
-                    ${isUser 
-                        ? 'bg-gradient-to-br from-indigo-950/80 to-purple-950/80 rounded-2xl rounded-tr-sm border-indigo-500/20 shadow-indigo-900/20' 
-                        : 'bg-zinc-900/90 rounded-2xl rounded-tl-sm border-zinc-800 text-zinc-100 shadow-black/40'
-                    }
-                  `}>
-                    {/* Colored Text Logic */}
-                    <span style={{ color: isUser ? '#e0e7ff' : charColor, textShadow: isUser ? 'none' : `0 0 15px ${charColor}40` }}>
-                        {msg.content}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          
-          {turnProcessing && (
-              <div className="flex justify-center py-8 animate-pulse">
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/50 border border-zinc-800/50">
-                      <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce delay-0"></div>
-                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce delay-150"></div>
-                      <div className="w-2 h-2 bg-pink-500 rounded-full animate-bounce delay-300"></div>
-                      <span className="text-xs font-bold text-zinc-500 ml-2 uppercase tracking-wider">Generating</span>
-                  </div>
-              </div>
-          )}
-          <div ref={chatEndRef} className="h-4" />
-        </main>
-
-        <footer className="flex-shrink-0 bg-zinc-900/80 backdrop-blur-xl border-t border-zinc-800/50 p-6 z-20 shadow-2xl relative">
-          <div className="max-w-4xl mx-auto space-y-4">
-            
-            {/* Director Input Bar */}
-            <div className="bg-black/40 p-1 rounded-xl flex gap-2 border border-zinc-800/50 shadow-inner group focus-within:border-amber-900/50 transition-colors">
-               <div className="px-3 flex items-center justify-center bg-zinc-900/50 rounded-lg mr-1">
-                   <span className="text-amber-500 text-xs font-bold uppercase tracking-wider flex items-center gap-2 select-none">
-                       <Clapperboard size={14} className="text-amber-500"/>
-                   </span>
-               </div>
-               <input 
-                  className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-200 placeholder-zinc-600 px-2 py-3 font-medium" 
-                  placeholder={t.directorPlaceholder} 
-                  value={directorInput} 
-                  onChange={(e) => setDirectorInput(e.target.value)} 
-                  onKeyDown={(e) => e.key === 'Enter' && handleDirectorMessage()} 
-               />
-               <button 
-                  onClick={handleDirectorMessage} 
-                  disabled={!directorInput.trim()} 
-                  className="text-amber-500 hover:text-amber-950 disabled:opacity-30 text-xs font-bold px-5 uppercase bg-amber-500/10 hover:bg-amber-500 rounded-lg transition-all"
-               >
-                  {t.inject}
-               </button>
-            </div>
-
-            {/* User Controls */}
-            {userCharacters.length > 0 ? (
-                <div className="flex gap-4 overflow-x-auto pb-2 pt-2 snap-x scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-                  {userCharacters.map(char => (
-                    <div key={char.id} className="snap-center flex-1 min-w-[320px] bg-zinc-800/80 backdrop-blur p-4 rounded-xl border border-zinc-700/50 hover:border-indigo-500/50 hover:bg-zinc-800 transition-all shadow-lg relative overflow-hidden group">
-                      <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                              <div className="ring-2 ring-indigo-500/30 rounded-full"><Avatar name={char.name} url={char.avatarUrl} size="sm" /></div>
-                              <div>
-                                  <span className="text-sm font-bold text-white block tracking-wide">{char.name}</span>
-                                  <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">{char.role}</span>
-                              </div>
-                          </div>
+        {/* Controls */}
+        <div className="relative z-20 p-6 bg-zinc-950/90 border-t border-zinc-800 backdrop-blur-xl">
+             <div className="max-w-4xl mx-auto flex flex-col gap-4">
+                 
+                 {/* God Mode Input */}
+                 <div className="flex gap-2 items-center">
+                      <div className="bg-amber-500/10 text-amber-500 p-2 rounded-lg">
+                          <Crown size={16} />
                       </div>
-                      <div className="relative">
-                          <textarea 
-                              className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded-lg p-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50 focus:bg-zinc-950 transition-all resize-none h-20 leading-relaxed" 
-                              placeholder={`${t.directorNote} (${char.speakingStyle})...`} 
-                              value={userInputs[char.id] || ''} 
-                              onChange={(e) => setUserInputs(prev => ({...prev, [char.id]: e.target.value}))} 
-                          />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-            ) : (
-                <div className="flex justify-center items-center gap-3 text-zinc-500 text-sm py-4 bg-zinc-900/50 rounded-xl border border-dashed border-zinc-800">
-                    <Users size={16} />
-                    <span className="font-medium tracking-wide">{t.observerMode}</span>
-                    {!isPlaying && <Button size="sm" variant="secondary" onClick={() => setIsPlaying(true)} className="ml-2">{t.resumeAuto}</Button>}
-                </div>
-            )}
-          </div>
-        </footer>
+                      <input 
+                         className="flex-1 bg-transparent border-none text-sm text-amber-200 placeholder-amber-500/30 focus:outline-none" 
+                         placeholder={t.directorPlaceholder}
+                         value={directorInput}
+                         onChange={e => setDirectorInput(e.target.value)}
+                         onKeyDown={e => e.key === 'Enter' && handleDirectorMessage()}
+                      />
+                      <button onClick={handleDirectorMessage} disabled={!directorInput} className="text-xs font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 uppercase tracking-wider">{t.inject}</button>
+                 </div>
+
+                 {/* User Roleplay Inputs (if any active characters) */}
+                 {userCharacters.length > 0 && (
+                     <div className="grid gap-2">
+                         {userCharacters.map(char => (
+                             <div key={char.id} className="flex gap-2">
+                                 <div className="w-10 h-10 rounded-full flex-shrink-0 border-2 border-indigo-500 overflow-hidden">
+                                    <Avatar name={char.name} url={char.avatarUrl} size="sm" />
+                                 </div>
+                                 <div className="flex-1 flex gap-2">
+                                     <input 
+                                         className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 text-white focus:border-indigo-500 outline-none transition-all" 
+                                         placeholder={`${t.speakingAs} ${char.name}...`}
+                                         value={userInputs[char.id] || ''}
+                                         onChange={e => setUserInputs({...userInputs, [char.id]: e.target.value})}
+                                         onKeyDown={async (e) => {
+                                             if (e.key === 'Enter' && userInputs[char.id]) {
+                                                 const text = userInputs[char.id];
+                                                 setUserInputs({...userInputs, [char.id]: ''});
+                                                 const msg: Message = { id: crypto.randomUUID(), characterId: char.id, content: text, type: 'dialogue', timestamp: Date.now() };
+                                                 handleUpdateScriptHistory(msg);
+                                             }
+                                         }}
+                                     />
+                                     <Button size="sm" icon={Send} onClick={() => {
+                                          const text = userInputs[char.id];
+                                          if (!text) return;
+                                          setUserInputs({...userInputs, [char.id]: ''});
+                                          const msg: Message = { id: crypto.randomUUID(), characterId: char.id, content: text, type: 'dialogue', timestamp: Date.now() };
+                                          handleUpdateScriptHistory(msg);
+                                     }} />
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                 )}
+             </div>
+        </div>
       </div>
     );
   };
 
+  const renderSettings = () => (
+      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end transition-opacity ${showSettings ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`w-full max-w-md bg-zinc-900 h-full shadow-2xl p-6 transform transition-transform duration-300 border-l border-zinc-800 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
+              <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-xl font-bold text-white">{t.settings}</h2>
+                  <button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white"><X /></button>
+              </div>
+              
+              <div className="space-y-6">
+                  <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.provider}</label>
+                      <div className="flex bg-zinc-800 p-1 rounded-lg">
+                          <button onClick={() => setAppSettings({...appSettings, activeProvider: 'GEMINI'})} className={`flex-1 py-2 text-sm font-bold rounded ${appSettings.activeProvider !== 'OPENROUTER' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400'}`}>Gemini</button>
+                          <button onClick={() => setAppSettings({...appSettings, activeProvider: 'OPENROUTER'})} className={`flex-1 py-2 text-sm font-bold rounded ${appSettings.activeProvider === 'OPENROUTER' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400'}`}>OpenRouter</button>
+                      </div>
+                  </div>
+
+                  {appSettings.activeProvider === 'OPENROUTER' ? (
+                      <>
+                        <div>
+                            <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.openRouterKey}</label>
+                            <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-700 focus-within:border-indigo-500">
+                                <Key size={16} className="text-zinc-500" />
+                                <input type="password" className="bg-transparent border-none text-white w-full focus:outline-none text-sm" value={appSettings.openRouterKey || ''} onChange={e => setAppSettings({...appSettings, openRouterKey: e.target.value})} placeholder="sk-or-..." />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.openRouterModel}</label>
+                            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white text-sm focus:border-indigo-500 outline-none" value={appSettings.openRouterModel || ''} onChange={e => setAppSettings({...appSettings, openRouterModel: e.target.value})} placeholder="google/gemini-2.0-flash-lite-preview-02-05:free" />
+                        </div>
+                      </>
+                  ) : (
+                      <div>
+                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.geminiKey}</label>
+                          <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-700 focus-within:border-indigo-500">
+                              <Key size={16} className="text-zinc-500" />
+                              <input type="password" className="bg-transparent border-none text-white w-full focus:outline-none text-sm" value={appSettings.apiKey || ''} onChange={e => setAppSettings({...appSettings, apiKey: e.target.value})} placeholder="AIza..." />
+                          </div>
+                          <p className="text-xs text-zinc-500 mt-2">{t.apiKeyHint}</p>
+                      </div>
+                  )}
+
+                  <div className="pt-6 border-t border-zinc-800">
+                       <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Language / 语言</label>
+                       <div className="flex gap-2">
+                           <button onClick={() => setLang('zh-CN')} className={`flex-1 py-2 border rounded-lg text-sm font-bold ${lang === 'zh-CN' ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'border-zinc-700 text-zinc-400'}`}>中文</button>
+                           <button onClick={() => setLang('en-US')} className={`flex-1 py-2 border rounded-lg text-sm font-bold ${lang === 'en-US' ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'border-zinc-700 text-zinc-400'}`}>English</button>
+                       </div>
+                  </div>
+
+                  <Button onClick={handleSaveSettings} className="w-full mt-4" variant="primary">{t.saveSettings}</Button>
+              </div>
+          </div>
+      </div>
+  );
+
   return (
     <>
-       {notification && <div className={`fixed top-6 right-6 z-50 animate-fade-in text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 border ${notification.type === 'error' ? 'bg-red-600 border-red-400/50' : 'bg-indigo-600 border-indigo-400/50'}`}><div><h4 className="font-bold text-sm uppercase tracking-wider">{notification.title}</h4><p className="text-sm font-medium">{notification.msg}</p></div></div>}
-       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-           <div className="bg-zinc-900 border border-zinc-700 p-8 rounded-2xl w-full max-w-md shadow-2xl">
-              <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><Settings className="text-indigo-500"/> {t.settings}</h2><button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white"><X size={20}/></button></div>
-              <div className="space-y-4">
-                 
-                 {/* Provider Switch */}
-                 <div className="bg-zinc-950 p-1 rounded-lg flex border border-zinc-800">
-                     <button onClick={() => setAppSettings(p => ({...p, activeProvider: 'GEMINI'}))} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${(!appSettings.activeProvider || appSettings.activeProvider === 'GEMINI') ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>GEMINI (Google)</button>
-                     <button onClick={() => setAppSettings(p => ({...p, activeProvider: 'OPENROUTER'}))} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${appSettings.activeProvider === 'OPENROUTER' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>OPENROUTER</button>
-                 </div>
-
-                 {(!appSettings.activeProvider || appSettings.activeProvider === 'GEMINI') && (
-                     <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">{t.geminiKey}</label>
-                        <input className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-white focus:border-indigo-500 outline-none placeholder-zinc-600" type="password" value={appSettings.apiKey || ''} onChange={e => setAppSettings(prev => ({...prev, apiKey: e.target.value}))} placeholder={t.apiKeyHint} />
-                        <p className="text-[10px] text-zinc-500 mt-2">{t.apiKeyHint}</p>
-                     </div>
-                 )}
-
-                 {appSettings.activeProvider === 'OPENROUTER' && (
-                     <div className="space-y-4 animate-fade-in">
-                         <div>
-                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">{t.openRouterKey}</label>
-                            <input className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-white focus:border-indigo-500 outline-none placeholder-zinc-600" type="password" value={appSettings.openRouterKey || ''} onChange={e => setAppSettings(prev => ({...prev, openRouterKey: e.target.value}))} placeholder="sk-or-..." />
-                         </div>
-                         <div>
-                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">{t.openRouterModel}</label>
-                            <input className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-3 text-white focus:border-indigo-500 outline-none placeholder-zinc-600" type="text" value={appSettings.openRouterModel || ''} onChange={e => setAppSettings(prev => ({...prev, openRouterModel: e.target.value}))} placeholder="google/gemini-2.0-flash-lite-preview-02-05:free" />
-                         </div>
-                     </div>
-                 )}
-
-                 <Button onClick={handleSaveSettings} className="w-full">{t.saveSettings}</Button>
-              </div>
-           </div>
+      {notification && (
+        <div className={`fixed top-4 right-4 z-[100] p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in ${notification.type === 'error' ? 'bg-red-500/10 border border-red-500/20 text-red-500' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-500'}`}>
+          {notification.type === 'error' ? <AlertCircle size={20}/> : <Sparkles size={20}/>}
+          <div>
+            <h4 className="font-bold text-sm">{notification.title}</h4>
+            <p className="text-xs opacity-80">{notification.msg}</p>
+          </div>
         </div>
       )}
+
       {view === 'DASHBOARD' && renderDashboard()}
       {view === 'EDITOR' && renderEditor()}
       {view === 'STAGE' && renderStage()}
+      {view === 'CHAT' && renderChatInterface()}
+      
+      {showCharModal && renderCharacterModal()}
+      {renderSettings()}
     </>
   );
 }

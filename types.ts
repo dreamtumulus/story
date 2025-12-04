@@ -27,12 +27,49 @@ export interface AppSettings {
 export interface Character {
   id: string;
   name: string;
-  role: string;
+  role: string; // In a script, this is their role (e.g. Detective). 
   personality: string;
   speakingStyle: string;
   visualDescription: string;
   avatarUrl?: string; 
   isUserControlled: boolean;
+  
+  // New fields for Global Characters
+  gender?: string;
+  age?: string;
+  isGlobal?: boolean; // If true, linked to a GlobalCharacter
+  globalId?: string;
+}
+
+export interface GlobalCharacter {
+  id: string;
+  ownerId: string;
+  name: string;
+  gender: string;
+  age: string;
+  personality: string;
+  speakingStyle: string;
+  visualDescription: string;
+  avatarUrl?: string;
+  createdAt: number;
+  
+  // Memory & Evolution
+  memories?: string[]; // Summarized facts/experiences from chats
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+  timestamp: number;
+}
+
+export interface ChatSession {
+  id: string;
+  characterId: string; // Links to GlobalCharacter
+  userId: string;
+  messages: ChatMessage[];
+  lastUpdated: number;
 }
 
 export interface Message {

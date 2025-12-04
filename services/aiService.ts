@@ -1,7 +1,7 @@
 
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Script, Character, Message, Language, AppSettings } from "../types";
+import { Script, Character, Message, Language, AppSettings, GlobalCharacter, ChatMessage } from "../types";
 
 const TEXT_MODEL = 'gemini-2.5-flash';
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
@@ -99,16 +99,33 @@ const safeJsonParse = <T>(text: string, fallback: T): T => {
 };
 
 /**
- * Generates the initial script structure with richer plots.
+ * Generates the initial script structure with richer plots, incorporating Pre-Defined Characters.
  */
-export const generateScriptBlueprint = async (prompt: string, lang: Language = 'zh-CN', settings?: AppSettings): Promise<Partial<Script>> => {
+export const generateScriptBlueprint = async (
+    prompt: string, 
+    predefinedCharacters: GlobalCharacter[] = [],
+    lang: Language = 'zh-CN', 
+    settings?: AppSettings
+): Promise<Partial<Script>> => {
   return withRetry(async () => {
     const langInstruction = lang === 'zh-CN' ? "Respond entirely in Simplified Chinese." : "Respond in English.";
+    
+    let charContext = "";
+    if (predefinedCharacters.length > 0) {
+        charContext = `
+        MUST INCLUDE THESE EXISTING CHARACTERS IN THE CAST:
+        ${predefinedCharacters.map(c => `- Name: ${c.name} (${c.gender}, ${c.age}). Personality: ${c.personality}. Visual: ${c.visualDescription}`).join('\n')}
+        
+        Assign them appropriate Roles in the story. You may add other characters if needed.
+        `;
+    }
+
     const systemInstruction = `
       You are a world-class screenwriter.
-      Create a detailed script scenario.
+      Create a detailed script scenario based on the prompt: "${prompt}".
       1. Plot Points must be sequential and causal.
       2. Characters must have conflicting goals.
+      ${charContext}
       ${langInstruction}
     `;
 
@@ -127,17 +144,17 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
         `;
         const data = await callOpenRouter(settings, [
             { role: "system", content: systemInstruction + jsonSchemaDesc },
-            { role: "user", content: `Create a script scenario based on: "${prompt}".` }
+            { role: "user", content: `Create a script scenario.` }
         ], true);
         
-        return processScriptData(data, prompt);
+        return processScriptData(data, prompt, predefinedCharacters);
     }
 
     // Default: Gemini
     const ai = getClient(settings);
     const response = await ai.models.generateContent({
       model: TEXT_MODEL,
-      contents: `Create a script scenario based on: "${prompt}".`,
+      contents: `Create a script scenario.`,
       config: {
         systemInstruction,
         responseMimeType: "application/json",
@@ -169,31 +186,231 @@ export const generateScriptBlueprint = async (prompt: string, lang: Language = '
     });
 
     const data = safeJsonParse(response.text || "{}", {});
-    return processScriptData(data, prompt);
+    return processScriptData(data, prompt, predefinedCharacters);
   });
 };
 
 // Helper to normalize script data from any provider
-const processScriptData = (data: any, originalPrompt: string) => {
+const processScriptData = (data: any, originalPrompt: string, preDefinedChars: GlobalCharacter[]) => {
+    // Map generated characters to existing globals if names match (fuzzy match)
+    const characters = (data.characters || []).map((c: any) => {
+        // Check if this generated char matches a predefined global char
+        const match = preDefinedChars.find(pc => pc.name.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(pc.name.toLowerCase()));
+        
+        if (match) {
+            return {
+                id: crypto.randomUUID(),
+                name: match.name, // Enforce global name
+                role: c.role,
+                personality: match.personality, // Enforce global personality
+                speakingStyle: match.speakingStyle,
+                visualDescription: match.visualDescription,
+                avatarUrl: match.avatarUrl,
+                isUserControlled: false,
+                isGlobal: true,
+                globalId: match.id,
+                gender: match.gender,
+                age: match.age
+            };
+        }
+
+        return {
+            id: crypto.randomUUID(),
+            name: c.name || "Unknown",
+            role: c.role || "Extra",
+            personality: c.personality || "Neutral",
+            speakingStyle: c.speakingStyle || "Normal",
+            visualDescription: c.visualDescription || "A person",
+            isUserControlled: false,
+        };
+    });
+
     return {
       title: data.title || "Untitled",
       premise: data.premise || originalPrompt,
       setting: data.setting || "",
       plotPoints: Array.isArray(data.plotPoints) ? data.plotPoints : [],
       possibleEndings: Array.isArray(data.possibleEndings) ? data.possibleEndings : [],
-      characters: (data.characters || []).map((c: any) => ({
-        id: crypto.randomUUID(),
-        name: c.name || "Unknown",
-        role: c.role || "Extra",
-        personality: c.personality || "Neutral",
-        speakingStyle: c.speakingStyle || "Normal",
-        visualDescription: c.visualDescription || "A person",
-        isUserControlled: false,
-      })),
+      characters: characters,
       history: [],
       currentPlotIndex: 0,
       lastUpdated: Date.now()
     };
+};
+
+/**
+ * Completes a Global Character Profile based on partial input.
+ * Specialized for "Name-First" creation.
+ */
+export const completeCharacterProfile = async (partialChar: Partial<GlobalCharacter>, settings?: AppSettings): Promise<Partial<GlobalCharacter>> => {
+    return withRetry(async () => {
+        const prompt = `
+            You are an expert character designer for a roleplay storytelling app.
+            
+            USER INPUT NAME: "${partialChar.name || "Unknown"}"
+            USER INPUT CONTEXT: ${JSON.stringify(partialChar)}
+
+            TASK:
+            1. Analyze the name. Is it a specific famous character (from anime, literature, movies, history)?
+               - YES: You MUST fill the profile to match that specific character canonically.
+               - NO: Create a creative, coherent original character based on the name.
+            2. Fill in all missing fields (gender, age, personality, speakingStyle, visualDescription).
+            3. The "visualDescription" must be a high-quality prompt for an image generator.
+            4. The "speakingStyle" should capture their catchphrases, tone, and mannerisms.
+
+            Return JSON with keys: name, gender, age, personality, speakingStyle, visualDescription.
+        `;
+        
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+            data = await callOpenRouter(settings, [{ role: "user", content: prompt }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            gender: { type: Type.STRING },
+                            age: { type: Type.STRING },
+                            personality: { type: Type.STRING },
+                            speakingStyle: { type: Type.STRING },
+                            visualDescription: { type: Type.STRING }
+                        }
+                    }
+                }
+            });
+            data = safeJsonParse(response.text || "{}", {});
+        }
+        
+        return {
+            ...partialChar,
+            name: data.name || partialChar.name,
+            gender: data.gender || partialChar.gender,
+            age: data.age || partialChar.age,
+            personality: data.personality || partialChar.personality,
+            speakingStyle: data.speakingStyle || partialChar.speakingStyle,
+            visualDescription: data.visualDescription || partialChar.visualDescription
+        };
+    });
+};
+
+/**
+ * Chat with a Character (Companion Mode) with memory.
+ */
+export const chatWithCharacter = async (
+    character: GlobalCharacter, 
+    history: ChatMessage[], 
+    userMessage: string,
+    settings?: AppSettings
+): Promise<string> => {
+    return withRetry(async () => {
+        // Limit history for context window but include memories
+        const recentHistory = history.slice(-15).map(m => `${m.role === 'user' ? 'User' : character.name}: ${m.content}`).join('\n');
+        
+        const memoriesContext = (character.memories && character.memories.length > 0) 
+            ? `LONG-TERM MEMORIES/FACTS:\n${character.memories.join('\n')}` 
+            : "";
+
+        const systemPrompt = `
+        You are roleplaying as ${character.name}.
+        Traits: ${character.gender}, ${character.age}.
+        Personality: ${character.personality}
+        Speaking Style: ${character.speakingStyle}
+        Visual: ${character.visualDescription}
+        
+        ${memoriesContext}
+        
+        Context: You are chatting with a user. Use your memories to make the conversation deep and personal.
+        Respond naturally in character. Do not break character.
+        Recent History:
+        ${recentHistory}
+        `;
+
+        if (settings?.activeProvider === 'OPENROUTER') {
+            return await callOpenRouter(settings, [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userMessage }
+            ]);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: `User says: "${userMessage}"`,
+                config: {
+                    systemInstruction: systemPrompt
+                }
+            });
+            return response.text || "...";
+        }
+    });
+};
+
+/**
+ * Evolves Character based on recent chat (Memory & Optimization).
+ */
+export const evolveCharacterFromChat = async (
+    character: GlobalCharacter,
+    recentMessages: ChatMessage[],
+    settings?: AppSettings
+): Promise<{ newPersonality: string, newSpeakingStyle: string, memory: string }> => {
+    return withRetry(async () => {
+        // Only analyze the last session (up to 20 messages)
+        const transcript = recentMessages.slice(-20).map(m => `${m.role}: ${m.content}`).join("\n");
+        
+        const prompt = `
+            Analyze this chat transcript between User and Character (${character.name}).
+            Current Personality: ${character.personality}
+            Current Style: ${character.speakingStyle}
+
+            Tasks:
+            1. Summarize 1 key fact or shared experience from this chat as a "Memory" (1 sentence). If nothing important happened, return empty string.
+            2. Refine the Character's "Personality" to be more specific based on how they acted or what they learned.
+            3. Refine the "Speaking Style" if they adopted any new mannerisms or catchphrases.
+
+            Return JSON:
+            {
+                "memory": "string (or empty)",
+                "newPersonality": "string (refined)",
+                "newSpeakingStyle": "string (refined)"
+            }
+            Transcript:
+            ${transcript}
+        `;
+
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+             data = await callOpenRouter(settings, [{ role: "user", content: prompt }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            memory: { type: Type.STRING },
+                            newPersonality: { type: Type.STRING },
+                            newSpeakingStyle: { type: Type.STRING }
+                        }
+                    }
+                }
+            });
+            data = safeJsonParse(response.text || "{}", {});
+        }
+
+        return {
+            newPersonality: data.newPersonality || character.personality,
+            newSpeakingStyle: data.newSpeakingStyle || character.speakingStyle,
+            memory: data.memory || ""
+        };
+    });
 };
 
 /**
@@ -328,6 +545,7 @@ export const refineText = async (
 
 /**
  * Determines the next turn in the story.
+ * OPTIMIZED: Reduced context window and simplified instructions for speed.
  */
 export const generateNextBeat = async (
     script: Script, 
@@ -337,44 +555,34 @@ export const generateNextBeat = async (
     settings?: AppSettings
 ): Promise<{ characterId: string; content: string; type: 'dialogue' | 'action' | 'narration' }> => {
   return withRetry(async () => {
-    const langInstruction = lang === 'zh-CN' ? "Respond in Simplified Chinese." : "Respond in English.";
+    const langInstruction = lang === 'zh-CN' ? "Language: Simplified Chinese." : "Language: English.";
     
-    // Context window
-    const recentHistory = script.history.slice(-15);
+    // Optimization: Only last 10 messages for context speed
+    const recentHistory = script.history.slice(-10);
     const historyText = recentHistory.map(m => {
       const charName = script.characters.find(c => c.id === m.characterId)?.name || "Narrator";
       return `${charName} [${m.type}]: ${m.content}`;
     }).join("\n");
 
     const characterProfiles = script.characters.map(c => 
-      `Name: ${c.name}, Style: ${c.speakingStyle}, Personality: ${c.personality}`
+      `${c.name} (${c.role}): ${c.personality.substring(0, 50)}...`
     ).join("\n");
 
     let promptContext = "";
     if (forcedDirectorCommand) {
-        promptContext = `
-        URGENT: The Director executed: "${forcedDirectorCommand}".
-        You MUST generate the immediate reaction to this.
-        If it's an action, narrate it. If a character reacts, have them speak.
-        Integrate this event smoothly.
-        `;
+        promptContext = `DIRECTOR COMMAND: "${forcedDirectorCommand}". React immediately.`;
     } else {
-        // Use the explicit target plot point passed from the App
-        const currentGoal = targetPlotPoint || "The story's conclusion";
-        promptContext = `
-        Current Chapter Goal: "${currentGoal}".
-        Progress the story towards this goal naturally.
-        Ensure characters speak according to their Style.
-        `;
+        const currentGoal = targetPlotPoint || "End";
+        promptContext = `Goal: "${currentGoal}". Move story forward.`;
     }
 
+    // Optimization: Shorter prompt
     const promptText = `
       Title: ${script.title}
-      Setting: ${script.setting}
       Chars: ${characterProfiles}
       History: ${historyText}
       ${promptContext}
-      Task: Generate NEXT beat.
+      Task: Generate ONE next beat.
       ${langInstruction}
       Return JSON: { "characterName": "...", "type": "dialogue|action|narration", "content": "..." }
     `;
@@ -389,6 +597,8 @@ export const generateNextBeat = async (
           contents: promptText,
           config: {
             responseMimeType: "application/json",
+            // Optimization: Remove strict schema definition if not strictly needed can speed up token generation sometimes, 
+            // but for reliability we keep it simple.
             responseSchema: {
               type: Type.OBJECT,
               properties: {
@@ -421,13 +631,12 @@ export const generateNextBeat = async (
 
 /**
  * Generates an avatar. 
- * NOTE: Image generation always uses Gemini (default key or user key) as OpenRouter image API is different.
  */
-export const generateAvatarImage = async (character: Character, settings?: AppSettings): Promise<string> => {
+export const generateAvatarImage = async (character: Character | GlobalCharacter, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
     // Always use Google Client for images (supports default key)
     const ai = getClient(settings); 
-    const prompt = `Portrait of ${character.name}, ${character.role}, ${character.visualDescription}. High quality, stylized avatar, headshot.`;
+    const prompt = `Portrait of ${character.name}, ${character.gender || ''}, ${character.age || ''}. ${character.visualDescription}. High quality, stylized avatar, headshot.`;
     
     const response = await ai.models.generateContent({
       model: IMAGE_MODEL,

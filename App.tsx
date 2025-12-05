@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Play, Pause, Save, Settings, 
@@ -6,7 +8,7 @@ import {
   Users, Globe, Trophy, Share2, Download, Copy, Star, Mic, Send,
   Wand2, RefreshCw, LayoutDashboard, Film, BookOpen, Crown, Clapperboard,
   LogOut, User as UserIcon, Key, X, AlertCircle, Loader2, Shuffle,
-  Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit
+  Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit, Video
 } from 'lucide-react';
 import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage } from './types';
 import { 
@@ -718,12 +720,14 @@ export default function App() {
       setIsChatting(true);
 
       try {
-          const responseText = await chatWithCharacter(char, updatedSession.messages, userMsg.content, appSettings);
+          const result = await chatWithCharacter(char, updatedSession.messages, userMsg.content, appSettings);
           const aiMsg: ChatMessage = {
               id: crypto.randomUUID(),
               role: 'model',
-              content: responseText,
-              timestamp: Date.now()
+              content: result.text,
+              timestamp: Date.now(),
+              mediaUrl: result.mediaUrl,
+              mediaType: result.mediaType
           };
           
           const finalSession = {
@@ -1201,7 +1205,24 @@ export default function App() {
                                }
                           </div>
                           <div className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-zinc-800 text-zinc-200 rounded-tl-none'}`}>
+                              {/* Text Content */}
                               {msg.content}
+                              
+                              {/* Media Content (Image/Video) */}
+                              {msg.mediaUrl && (
+                                  <div className="mt-3 rounded-xl overflow-hidden shadow-lg border border-white/10">
+                                      {msg.mediaType === 'image' ? (
+                                          <img src={msg.mediaUrl} alt="Generated" className="w-full h-auto max-h-96 object-cover" />
+                                      ) : msg.mediaType === 'video' ? (
+                                          <div className="relative">
+                                              <video src={msg.mediaUrl} controls className="w-full h-auto max-h-96" />
+                                              <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur rounded text-[10px] text-white flex items-center gap-1">
+                                                  <Video size={10} /> AI Video
+                                              </div>
+                                          </div>
+                                      ) : null}
+                                  </div>
+                              )}
                           </div>
                       </div>
                   ))}

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Play, Pause, Save, Settings, 
@@ -8,7 +6,8 @@ import {
   Users, Globe, Trophy, Share2, Download, Copy, Star, Mic, Send,
   Wand2, RefreshCw, LayoutDashboard, Film, BookOpen, Crown, Clapperboard,
   LogOut, User as UserIcon, Key, X, AlertCircle, Loader2, Shuffle,
-  Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit, Video
+  Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit, Video,
+  Filter
 } from 'lucide-react';
 import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage } from './types';
 import { 
@@ -151,6 +150,10 @@ const TRANSLATIONS = {
     memorySaved: "角色已进化！记忆已更新。",
     enterNameHint: "输入角色名（如：林黛玉，孙悟空）",
     autoFillLoading: "正在刻画角色形象...",
+    filter: "筛选",
+    filterAll: "全部角色",
+    filterMale: "男性",
+    filterFemale: "女性",
   },
   'en-US': {
     title: "Daydreaming",
@@ -248,6 +251,10 @@ const TRANSLATIONS = {
     memorySaved: "Character Evolved! Memory Saved.",
     enterNameHint: "Enter name (e.g. Sherlock Holmes)",
     autoFillLoading: "Crafting profile...",
+    filter: "Filter",
+    filterAll: "All Characters",
+    filterMale: "Male",
+    filterFemale: "Female",
   }
 };
 
@@ -346,6 +353,9 @@ export default function App() {
     const saved = localStorage.getItem('skena_achievements');
     return saved ? JSON.parse(saved) : INITIAL_ACHIEVEMENTS;
   });
+
+  // --- Character Filter State ---
+  const [characterFilter, setCharacterFilter] = useState('ALL');
 
   // --- Selection State for New Script ---
   const [selectedCastIds, setSelectedCastIds] = useState<string[]>([]);
@@ -920,143 +930,166 @@ export default function App() {
   }
 
   const renderDashboard = () => (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center relative overflow-hidden">
+    <div className="h-screen bg-zinc-950 flex flex-col items-center relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-[-20%] left-[20%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[10%] w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[100px]" />
       </div>
 
-      <header className="w-full max-w-6xl px-6 py-6 flex justify-between items-center z-10">
-        <Logo />
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={() => setShowSettings(true)} icon={Settings} size="sm"></Button>
-          <div className="flex items-center gap-2 text-sm font-bold text-zinc-400 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800">
-             <UserIcon size={14}/> {currentUser.username}
-          </div>
-          <Button variant="ghost" onClick={handleLogout} icon={LogOut} size="sm" className="text-zinc-600 hover:text-red-400"></Button>
-        </div>
-      </header>
-
-      {dashboardTab === 'SCRIPTS' && (
-      <section className="w-full max-w-4xl px-6 pt-8 pb-16 text-center z-10 flex flex-col items-center">
-        <h1 className="text-5xl md:text-6xl font-black text-white mb-6 leading-tight tracking-tight drop-shadow-2xl">{t.heroTitle}</h1>
-        <p className="text-lg md:text-xl text-zinc-400 mb-10 max-w-2xl leading-relaxed">{t.heroSubtitle}</p>
-        <div className="w-full max-w-2xl relative">
-          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-20 transition duration-1000"></div>
-          <div className="relative flex flex-col bg-zinc-900/90 backdrop-blur-xl border border-zinc-700/50 rounded-2xl shadow-2xl overflow-hidden">
-             {/* Input Area */}
-             <div className="flex items-center p-2">
-                <Sparkles className="text-indigo-400 ml-4 mr-2" />
-                <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateScript()} placeholder={t.placeholder} className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-zinc-500 h-12" />
-                <Button onClick={handleCreateScript} disabled={isGenerating || !promptInput} size="md" className="rounded-xl px-6 shadow-none">
-                {isGenerating ? t.dreaming : t.create}
-                </Button>
-             </div>
-             {/* Character Selection */}
-             <div className="px-4 pb-2 flex justify-start">
-                 <button onClick={() => setShowCastSelector(!showCastSelector)} className="text-xs font-bold text-zinc-500 flex items-center gap-2 hover:text-indigo-400 transition-colors pb-2">
-                     <Users size={12} /> {t.selectCharacters} {selectedCastIds.length > 0 && `(${selectedCastIds.length})`}
-                 </button>
-             </div>
-             {showCastSelector && (
-                 <div className="bg-zinc-950/50 border-t border-zinc-800 p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 animate-fade-in max-h-40 overflow-y-auto">
-                     {globalCharacters.map(c => (
-                         <div key={c.id} onClick={() => {
-                             if(selectedCastIds.includes(c.id)) setSelectedCastIds(prev => prev.filter(id => id !== c.id));
-                             else setSelectedCastIds(prev => [...prev, c.id]);
-                         }} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${selectedCastIds.includes(c.id) ? 'bg-indigo-900/30 border-indigo-500/50' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>
-                             <Avatar name={c.name} url={c.avatarUrl} size="sm" />
-                             <span className="text-xs truncate font-medium text-zinc-300">{c.name}</span>
-                         </div>
-                     ))}
-                     {globalCharacters.length === 0 && <span className="text-zinc-500 text-xs col-span-full">No characters created yet. Go to Characters tab.</span>}
-                 </div>
-             )}
-          </div>
-        </div>
-      </section>
-      )}
-
-      <main className="w-full max-w-6xl px-6 pb-20 z-10 flex-1 mt-8">
-        <div className="flex justify-center mb-10">
-          <div className="flex bg-zinc-900/80 backdrop-blur p-1 rounded-full border border-zinc-800">
-            {[ { id: 'CHARACTERS', label: t.characters, icon: Users }, { id: 'SCRIPTS', label: t.myScripts, icon: Film }, { id: 'TEMPLATES', label: t.templates, icon: BookOpen }, { id: 'ACHIEVEMENTS', label: t.achievements, icon: Trophy } ].map(tab => (
-              <button key={tab.id} onClick={() => setDashboardTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all text-sm font-bold ${dashboardTab === tab.id ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
-                <tab.icon size={14} /> {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="animate-fade-in">
-          {dashboardTab === 'SCRIPTS' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {(scripts || []).filter(s => !s.isTemplate).map(script => (
-                <div key={script.id} onClick={() => { setCurrentScript(script); setView('STAGE'); }} className="group cursor-pointer bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:scale-[1.02] hover:shadow-2xl hover:border-indigo-500/30 transition-all flex flex-col h-[280px]">
-                  <div className="h-2 bg-gradient-to-r from-indigo-500 to-purple-500 w-full" />
-                  <div className="p-6 flex flex-col h-full">
-                    <h3 className="font-bold text-xl text-white group-hover:text-indigo-300 transition-colors line-clamp-1 mb-2">{script.title}</h3>
-                    <p className="text-zinc-400 text-sm line-clamp-3 mb-auto">{script.premise}</p>
-                    <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
-                       <div className="flex -space-x-2 pl-2">
-                         {(script.characters || []).slice(0, 3).map(c => <div key={c.id} className="relative"><Avatar name={c.name} url={c.avatarUrl} size="sm" /></div>)}
-                       </div>
-                       <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-indigo-600 transition-colors"><Play size={14} fill="currentColor" /></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {dashboardTab === 'CHARACTERS' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {/* Create New Card */}
-                  <div onClick={openNewCharacterModal} className="cursor-pointer bg-gradient-to-br from-indigo-900/20 to-zinc-900 border border-indigo-500/30 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 hover:bg-indigo-900/30 transition-all group min-h-[300px]">
-                      <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                          <Plus size={32} className="text-indigo-400" />
-                      </div>
-                      <h3 className="text-xl font-bold text-white group-hover:text-indigo-300">{t.createCharacter}</h3>
-                      <p className="text-zinc-500 text-sm mt-2 text-center">Design a new persona with AI magic</p>
-                  </div>
-
-                  {globalCharacters.map(char => (
-                      <div key={char.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-indigo-500/50 hover:shadow-xl transition-all group flex flex-col relative min-h-[300px]">
-                          <div className="flex justify-center -mt-10 mb-4">
-                              <Avatar name={char.name} url={char.avatarUrl} size="xl" />
-                          </div>
-                          <div className="text-center mb-4 flex-1">
-                              <h3 className="font-bold text-white text-xl mb-1">{char.name}</h3>
-                              <p className="text-xs text-indigo-400 font-bold uppercase tracking-wider mb-2">Character</p>
-                              <div className="flex justify-center gap-2 mb-3">
-                                  <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.gender}</span>
-                                  <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.age}</span>
-                              </div>
-                              <p className="text-sm text-zinc-500 line-clamp-3 italic">"{char.personality}"</p>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2 mt-auto">
-                              <Button size="sm" variant="secondary" className="text-xs" onClick={() => handleEditCharacter(char)} icon={Edit3}>{t.editCharacter}</Button>
-                              <Button size="sm" variant="primary" className="text-xs" onClick={() => handleOpenChat(char)} icon={MessageSquare}>{t.chatWith}</Button>
-                          </div>
-                          <button className="absolute top-4 right-4 text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setGlobalCharacters(p => p.filter(c => c.id !== char.id)); }}>
-                             <Trash2 size={16}/>
-                          </button>
-                      </div>
-                  ))}
+      <div className="flex-1 w-full overflow-y-auto flex flex-col items-center z-10 scroll-smooth">
+          <header className="w-full max-w-6xl px-6 py-6 flex justify-between items-center z-10 flex-shrink-0">
+            <Logo />
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" onClick={() => setShowSettings(true)} icon={Settings} size="sm"></Button>
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-400 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800">
+                <UserIcon size={14}/> {currentUser.username}
               </div>
-          )}
-          {dashboardTab === 'TEMPLATES' && <div className="text-center py-20 text-zinc-500"><Button onClick={() => {}} icon={Plus} variant="secondary">Use Script as Template</Button></div>}
-          {dashboardTab === 'ACHIEVEMENTS' && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {(achievements || []).map(ach => (
-                <div key={ach.id} className={`p-6 rounded-2xl border flex flex-col items-center text-center transition-all duration-500 ${ach.unlocked ? 'bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border-indigo-500/50 scale-105' : 'bg-zinc-900 border-zinc-800 opacity-50 grayscale'}`}>
-                  <div className="text-5xl mb-4">{ach.icon}</div>
-                  <h3 className={`font-bold text-sm ${ach.unlocked ? 'text-white' : 'text-zinc-500'}`}>{ach.title}</h3>
-                </div>
-              ))}
+              <Button variant="ghost" onClick={handleLogout} icon={LogOut} size="sm" className="text-zinc-600 hover:text-red-400"></Button>
             </div>
+          </header>
+
+          {dashboardTab === 'SCRIPTS' && (
+          <section className="w-full max-w-4xl px-6 pt-8 pb-16 text-center z-10 flex flex-col items-center">
+            <h1 className="text-5xl md:text-6xl font-black text-white mb-6 leading-tight tracking-tight drop-shadow-2xl">{t.heroTitle}</h1>
+            <p className="text-lg md:text-xl text-zinc-400 mb-10 max-w-2xl leading-relaxed">{t.heroSubtitle}</p>
+            <div className="w-full max-w-2xl relative">
+              <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-20 transition duration-1000"></div>
+              <div className="relative flex flex-col bg-zinc-900/90 backdrop-blur-xl border border-zinc-700/50 rounded-2xl shadow-2xl overflow-hidden">
+                {/* Input Area */}
+                <div className="flex items-center p-2">
+                    <Sparkles className="text-indigo-400 ml-4 mr-2" />
+                    <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateScript()} placeholder={t.placeholder} className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-zinc-500 h-12" />
+                    <Button onClick={handleCreateScript} disabled={isGenerating || !promptInput} size="md" className="rounded-xl px-6 shadow-none">
+                    {isGenerating ? t.dreaming : t.create}
+                    </Button>
+                </div>
+                {/* Character Selection */}
+                <div className="px-4 pb-2 flex justify-start">
+                    <button onClick={() => setShowCastSelector(!showCastSelector)} className="text-xs font-bold text-zinc-500 flex items-center gap-2 hover:text-indigo-400 transition-colors pb-2">
+                        <Users size={12} /> {t.selectCharacters} {selectedCastIds.length > 0 && `(${selectedCastIds.length})`}
+                    </button>
+                </div>
+                {showCastSelector && (
+                    <div className="bg-zinc-950/50 border-t border-zinc-800 p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 animate-fade-in max-h-40 overflow-y-auto">
+                        {globalCharacters.map(c => (
+                            <div key={c.id} onClick={() => {
+                                if(selectedCastIds.includes(c.id)) setSelectedCastIds(prev => prev.filter(id => id !== c.id));
+                                else setSelectedCastIds(prev => [...prev, c.id]);
+                            }} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${selectedCastIds.includes(c.id) ? 'bg-indigo-900/30 border-indigo-500/50' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>
+                                <Avatar name={c.name} url={c.avatarUrl} size="sm" />
+                                <span className="text-xs truncate font-medium text-zinc-300">{c.name}</span>
+                            </div>
+                        ))}
+                        {globalCharacters.length === 0 && <span className="text-zinc-500 text-xs col-span-full">No characters created yet. Go to Characters tab.</span>}
+                    </div>
+                )}
+              </div>
+            </div>
+          </section>
           )}
-        </div>
-      </main>
+
+          <main className="w-full max-w-6xl px-6 pb-20 z-10 flex-1 mt-8">
+            <div className="flex justify-center mb-10">
+              <div className="flex bg-zinc-900/80 backdrop-blur p-1 rounded-full border border-zinc-800">
+                {[ { id: 'CHARACTERS', label: t.characters, icon: Users }, { id: 'SCRIPTS', label: t.myScripts, icon: Film }, { id: 'TEMPLATES', label: t.templates, icon: BookOpen }, { id: 'ACHIEVEMENTS', label: t.achievements, icon: Trophy } ].map(tab => (
+                  <button key={tab.id} onClick={() => setDashboardTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all text-sm font-bold ${dashboardTab === tab.id ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                    <tab.icon size={14} /> {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="animate-fade-in">
+              {dashboardTab === 'SCRIPTS' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {(scripts || []).filter(s => !s.isTemplate).map(script => (
+                    <div key={script.id} onClick={() => { setCurrentScript(script); setView('STAGE'); }} className="group cursor-pointer bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:scale-[1.02] hover:shadow-2xl hover:border-indigo-500/30 transition-all flex flex-col h-[280px]">
+                      <div className="h-2 bg-gradient-to-r from-indigo-500 to-purple-500 w-full" />
+                      <div className="p-6 flex flex-col h-full">
+                        <h3 className="font-bold text-xl text-white group-hover:text-indigo-300 transition-colors line-clamp-1 mb-2">{script.title}</h3>
+                        <p className="text-zinc-400 text-sm line-clamp-3 mb-auto">{script.premise}</p>
+                        <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
+                          <div className="flex -space-x-2 pl-2">
+                            {(script.characters || []).slice(0, 3).map(c => <div key={c.id} className="relative"><Avatar name={c.name} url={c.avatarUrl} size="sm" /></div>)}
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-indigo-600 transition-colors"><Play size={14} fill="currentColor" /></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {dashboardTab === 'CHARACTERS' && (
+                  <div>
+                      <div className="flex justify-end mb-4">
+                          <div className="flex items-center gap-2 bg-zinc-900 rounded-lg p-1 border border-zinc-800">
+                             <div className="px-2 text-zinc-500"><Filter size={14} /></div>
+                             <select 
+                                value={characterFilter} 
+                                onChange={(e) => setCharacterFilter(e.target.value)}
+                                className="bg-transparent text-sm text-zinc-300 focus:outline-none py-1 pr-2 cursor-pointer"
+                             >
+                                <option value="ALL">{t.filterAll}</option>
+                                <option value="MALE">{t.filterMale}</option>
+                                <option value="FEMALE">{t.filterFemale}</option>
+                             </select>
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                          {/* Create New Card */}
+                          <div onClick={openNewCharacterModal} className="cursor-pointer bg-gradient-to-br from-indigo-900/20 to-zinc-900 border border-indigo-500/30 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 hover:bg-indigo-900/30 transition-all group min-h-[300px]">
+                              <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                  <Plus size={32} className="text-indigo-400" />
+                              </div>
+                              <h3 className="text-xl font-bold text-white group-hover:text-indigo-300">{t.createCharacter}</h3>
+                              <p className="text-zinc-500 text-sm mt-2 text-center">Design a new persona with AI magic</p>
+                          </div>
+
+                          {globalCharacters.filter(c => {
+                                if (characterFilter === 'ALL') return true;
+                                if (characterFilter === 'MALE') return c.gender === '男' || c.gender?.toLowerCase() === 'male';
+                                if (characterFilter === 'FEMALE') return c.gender === '女' || c.gender?.toLowerCase() === 'female';
+                                return true;
+                          }).map(char => (
+                              <div key={char.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-indigo-500/50 hover:shadow-xl transition-all group flex flex-col relative min-h-[300px]">
+                                  <div className="flex justify-center -mt-10 mb-4">
+                                      <Avatar name={char.name} url={char.avatarUrl} size="xl" />
+                                  </div>
+                                  <div className="text-center mb-4 flex-1">
+                                      <h3 className="font-bold text-white text-xl mb-1">{char.name}</h3>
+                                      <p className="text-xs text-indigo-400 font-bold uppercase tracking-wider mb-2">Character</p>
+                                      <div className="flex justify-center gap-2 mb-3">
+                                          <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.gender}</span>
+                                          <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.age}</span>
+                                      </div>
+                                      <p className="text-sm text-zinc-500 line-clamp-3 italic">"{char.personality}"</p>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-2 mt-auto">
+                                      <Button size="sm" variant="secondary" className="text-xs" onClick={() => handleEditCharacter(char)} icon={Edit3}>{t.editCharacter}</Button>
+                                      <Button size="sm" variant="primary" className="text-xs" onClick={() => handleOpenChat(char)} icon={MessageSquare}>{t.chatWith}</Button>
+                                  </div>
+                                  <button className="absolute top-4 right-4 text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setGlobalCharacters(p => p.filter(c => c.id !== char.id)); }}>
+                                    <Trash2 size={16}/>
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+              {dashboardTab === 'TEMPLATES' && <div className="text-center py-20 text-zinc-500"><Button onClick={() => {}} icon={Plus} variant="secondary">Use Script as Template</Button></div>}
+              {dashboardTab === 'ACHIEVEMENTS' && (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {(achievements || []).map(ach => (
+                    <div key={ach.id} className={`p-6 rounded-2xl border flex flex-col items-center text-center transition-all duration-500 ${ach.unlocked ? 'bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border-indigo-500/50 scale-105' : 'bg-zinc-900 border-zinc-800 opacity-50 grayscale'}`}>
+                      <div className="text-5xl mb-4">{ach.icon}</div>
+                      <h3 className={`font-bold text-sm ${ach.unlocked ? 'text-white' : 'text-zinc-500'}`}>{ach.title}</h3>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </main>
+      </div>
     </div>
   );
 

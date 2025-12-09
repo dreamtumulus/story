@@ -7,7 +7,7 @@ import {
   Wand2, RefreshCw, LayoutDashboard, Film, BookOpen, Crown, Clapperboard,
   LogOut, User as UserIcon, Key, X, AlertCircle, Loader2, Shuffle,
   Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit, Video,
-  Filter, FileText, Book
+  Filter, FileText, Book, CheckCircle
 } from 'lucide-react';
 import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage, NovelStyle } from './types';
 import { 
@@ -177,6 +177,8 @@ const TRANSLATIONS = {
     generatingNovel: "正在撰写小说...",
     downloadNovel: "下载小说",
     fastForwarding: "正在快速演绎剩余剧情...",
+    finishFirst: "先完结故事 (AI自动演绎剩余章节)",
+    finishingStory: "正在完结故事...",
   },
   'en-US': {
     title: "Daydreaming",
@@ -289,6 +291,8 @@ const TRANSLATIONS = {
     generatingNovel: "Writing novel...",
     downloadNovel: "Download Novel",
     fastForwarding: "Fast-forwarding remaining scenes...",
+    finishFirst: "Auto-finish story first (AI enacts remaining chapters)",
+    finishingStory: "Finishing story...",
   }
 };
 
@@ -427,6 +431,7 @@ export default function App() {
   const [novelStyle, setNovelStyle] = useState<NovelStyle>('STANDARD');
   const [generatedNovelText, setGeneratedNovelText] = useState('');
   const [isGeneratingNovel, setIsGeneratingNovel] = useState(false);
+  const [autoCompleteNovel, setAutoCompleteNovel] = useState(false);
   
   // Director Queue Buffer for God Mode
   const directorQueueRef = useRef<string[]>([]);
@@ -1005,8 +1010,10 @@ export default function App() {
           };
           updateScriptState(updatedScript);
           showNotification("Complete", "Story fast-forwarded successfully!", 'success');
+          return updatedScript;
       } catch (e) {
           showNotification("Error", "Fast forward failed", 'error');
+          return currentScript;
       } finally {
           setIsFastForwarding(false);
       }
@@ -1016,6 +1023,10 @@ export default function App() {
   
   const handleOpenNovelModal = () => {
       setGeneratedNovelText(currentScript?.novelText || '');
+      // If script is not finished, default to checking auto-complete
+      if (currentScript && currentScript.currentPlotIndex < currentScript.plotPoints.length) {
+          setAutoCompleteNovel(true);
+      }
       setShowNovelModal(true);
   };
 
@@ -1023,9 +1034,17 @@ export default function App() {
       if (!currentScript) return;
       setIsGeneratingNovel(true);
       try {
-          const text = await generateNovelVersion(currentScript, novelStyle, appSettings);
+          let scriptToProcess = currentScript;
+
+          // 1. Auto Complete First if requested
+          if (autoCompleteNovel && currentScript.currentPlotIndex < currentScript.plotPoints.length) {
+              scriptToProcess = await handleFastForward();
+          }
+
+          // 2. Generate Novel
+          const text = await generateNovelVersion(scriptToProcess, novelStyle, appSettings);
           setGeneratedNovelText(text);
-          updateScriptState({ ...currentScript, novelText: text });
+          updateScriptState({ ...scriptToProcess, novelText: text });
       } catch (e) {
           showNotification("Error", "Failed to write novel", 'error');
       } finally {
@@ -1598,7 +1617,7 @@ export default function App() {
               </div>
 
               <div className="flex-1 flex overflow-hidden">
-                  <div className="w-1/3 bg-zinc-950 p-6 border-r border-zinc-800 space-y-6">
+                  <div className="w-1/3 bg-zinc-950 p-6 border-r border-zinc-800 space-y-6 flex flex-col">
                        <div>
                            <label className="text-xs font-bold text-zinc-500 uppercase block mb-3">{t.novelStyle}</label>
                            <div className="space-y-2">
@@ -1612,8 +1631,25 @@ export default function App() {
                                ))}
                            </div>
                        </div>
-                       <Button onClick={handleGenerateNovel} disabled={isGeneratingNovel} variant="primary" className="w-full" icon={isGeneratingNovel ? Loader2 : Sparkles}>
-                           {isGeneratingNovel ? t.generatingNovel : "Generate Novel"}
+                       
+                       {/* Auto Complete Option */}
+                       {currentScript && currentScript.currentPlotIndex < currentScript.plotPoints.length && (
+                           <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 cursor-pointer hover:border-indigo-500/50 transition-all" onClick={() => setAutoCompleteNovel(!autoCompleteNovel)}>
+                               <div className="flex items-center gap-3">
+                                   <div className={`w-5 h-5 rounded flex items-center justify-center border ${autoCompleteNovel ? 'bg-indigo-600 border-indigo-600' : 'border-zinc-600'}`}>
+                                       {autoCompleteNovel && <CheckCircle size={14} className="text-white" />}
+                                   </div>
+                                   <span className="text-sm text-zinc-300 font-medium">{t.finishFirst}</span>
+                               </div>
+                           </div>
+                       )}
+
+                       <Button onClick={handleGenerateNovel} disabled={isGeneratingNovel} variant="primary" className="w-full mt-auto" icon={isGeneratingNovel ? Loader2 : Sparkles}>
+                           {isGeneratingNovel 
+                             ? (autoCompleteNovel && currentScript?.currentPlotIndex! < currentScript?.plotPoints.length 
+                                ? t.finishingStory 
+                                : t.generatingNovel) 
+                             : "Generate Novel"}
                        </Button>
                   </div>
                   
@@ -1696,7 +1732,7 @@ export default function App() {
                  <Button size="sm" variant="secondary" icon={Book} onClick={handleOpenNovelModal}>{t.exportNovel}</Button>
                  
                  {/* New Fast Finish Button */}
-                 <Button size="sm" variant="secondary" icon={Zap} onClick={handleFastForward} className="text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10">{t.autoComplete}</Button>
+                 <Button size="sm" variant="secondary" icon={Zap} onClick={() => handleFastForward()} className="text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10">{t.autoComplete}</Button>
                  
                  <Button size="sm" variant="secondary" icon={SkipForward} onClick={handleNextChapter}>{t.skipChapter}</Button>
                  <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={isPlaying ? Pause : Play} onClick={() => setIsPlaying(!isPlaying)}>

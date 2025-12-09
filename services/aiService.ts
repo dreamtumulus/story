@@ -6,6 +6,10 @@ const IMAGE_MODEL = 'gemini-2.5-flash-image';
 const VIDEO_MODEL = 'veo-3.1-fast-generate-preview';
 const DEFAULT_GEMINI_KEY = 'AIzaSyC6zQSEAAdLRgOMR6_CwQ1sSNVur0_vpW0';
 
+// --- Timeouts ---
+const STANDARD_TIMEOUT = 60000; // 60s for standard interactions
+const HEAVY_TASK_TIMEOUT = 180000; // 3 minutes for novel writing/blueprints
+
 // --- UUID Polyfill (Prevents crashes on non-secure contexts) ---
 export const generateId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -57,7 +61,8 @@ const timeoutPromise = (ms: number) => new Promise((_, reject) => setTimeout(() 
 async function callOpenRouter(
     settings: AppSettings | undefined,
     messages: { role: string, content: string }[],
-    jsonMode = false
+    jsonMode = false,
+    timeoutMs = STANDARD_TIMEOUT
 ): Promise<any> {
     const key = settings?.openRouterKey;
     if (!key) throw new Error("OpenRouter API Key missing");
@@ -79,8 +84,7 @@ async function callOpenRouter(
         })
     });
 
-    // Increased timeout to 60s
-    const response: any = await Promise.race([fetchPromise, timeoutPromise(60000)]);
+    const response: any = await Promise.race([fetchPromise, timeoutPromise(timeoutMs)]);
 
     if (!response.ok) {
         throw new Error(`OpenRouter Error: ${response.statusText}`);
@@ -417,6 +421,7 @@ export const evolveCharacterFromChat = async (
 
 /**
  * Generates the initial script structure with richer plots, incorporating Pre-Defined Characters.
+ * UPDATED: Uses HEAVY_TASK_TIMEOUT and emphasizes sequential logic.
  */
 export const generateScriptBlueprint = async (
     prompt: string, 
@@ -440,8 +445,12 @@ export const generateScriptBlueprint = async (
     const systemInstruction = `
       You are a world-class screenwriter.
       Create a detailed script scenario based on the prompt: "${prompt}".
-      1. Plot Points must be sequential and causal.
-      2. Characters must have conflicting goals.
+      
+      CRITICAL RULES:
+      1. Plot Points must be SEQUENTIAL and CAUSALLY LINKED (Scene by Scene).
+      2. Ensure the story has a clear beginning, middle, and end.
+      3. Characters must have conflicting goals.
+      
       ${charContext}
       ${langInstruction}
     `;
@@ -462,7 +471,7 @@ export const generateScriptBlueprint = async (
         const data = await callOpenRouter(settings, [
             { role: "system", content: systemInstruction + jsonSchemaDesc },
             { role: "user", content: `Create a script scenario.` }
-        ], true);
+        ], true, HEAVY_TASK_TIMEOUT);
         
         return processScriptData(data, prompt, predefinedCharacters);
     }
@@ -502,7 +511,7 @@ export const generateScriptBlueprint = async (
                 }
             }
         }),
-        timeoutPromise(60000) // Increased to 60s
+        timeoutPromise(HEAVY_TASK_TIMEOUT) // Increased to 180s
     ]) as any;
 
     const data = safeJsonParse(response.text || "{}", {});
@@ -769,6 +778,7 @@ export const generateNextChapterPlan = async (
 
 /**
  * Auto-Completes the story by generating narration for ALL remaining plot points.
+ * UPDATED: Uses HEAVY_TASK_TIMEOUT to prevent "Request timed out" on long stories.
  */
 export const autoCompleteStory = async (
     script: Script,
@@ -794,22 +804,25 @@ export const autoCompleteStory = async (
 
         let data;
         if (settings?.activeProvider === 'OPENROUTER') {
-            data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+            data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true, HEAVY_TASK_TIMEOUT);
         } else {
             const ai = getClient(settings);
-            const response = await ai.models.generateContent({
-                model: TEXT_MODEL,
-                contents: promptText,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            narrations: { type: Type.ARRAY, items: { type: Type.STRING } }
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: TEXT_MODEL,
+                    contents: promptText,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                narrations: { type: Type.ARRAY, items: { type: Type.STRING } }
+                            }
                         }
                     }
-                }
-            });
+                }),
+                timeoutPromise(HEAVY_TASK_TIMEOUT) // 3 minutes
+            ]) as any;
             data = safeJsonParse(response.text || "{}", {});
         }
 
@@ -826,6 +839,7 @@ export const autoCompleteStory = async (
 
 /**
  * Generates a full Novel version of the script history in a specific style.
+ * UPDATED: Uses HEAVY_TASK_TIMEOUT to prevent "Request timed out".
  */
 export const generateNovelVersion = async (
     script: Script,
@@ -864,13 +878,16 @@ export const generateNovelVersion = async (
         `;
 
         if (settings?.activeProvider === 'OPENROUTER') {
-            return await callOpenRouter(settings, [{ role: "user", content: promptText }]);
+            return await callOpenRouter(settings, [{ role: "user", content: promptText }], false, HEAVY_TASK_TIMEOUT);
         } else {
             const ai = getClient(settings);
-            const response = await ai.models.generateContent({
-                model: TEXT_MODEL,
-                contents: promptText
-            });
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: TEXT_MODEL,
+                    contents: promptText
+                }),
+                timeoutPromise(HEAVY_TASK_TIMEOUT) // 3 minutes
+            ]) as any;
             return response.text || "Failed to generate novel.";
         }
     });

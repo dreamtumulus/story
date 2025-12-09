@@ -1,16 +1,19 @@
 import { GoogleGenAI, Type, FunctionDeclaration, Tool } from "@google/genai";
 import { Script, Character, Message, Language, AppSettings, GlobalCharacter, ChatMessage, NovelStyle } from "../types";
 
+// --- 模型常量定义 ---
 const TEXT_MODEL = 'gemini-2.5-flash';
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 const VIDEO_MODEL = 'veo-3.1-fast-generate-preview';
 const DEFAULT_GEMINI_KEY = 'AIzaSyC6zQSEAAdLRgOMR6_CwQ1sSNVur0_vpW0';
 
-// --- Timeouts ---
-const STANDARD_TIMEOUT = 60000; // 60s for standard interactions
-const HEAVY_TASK_TIMEOUT = 180000; // 3 minutes for novel writing/blueprints
+// --- 超时设置 ---
+// 针对不同任务设置不同的超时时间，避免长任务被前端截断
+const STANDARD_TIMEOUT = 60000; // 标准交互 60秒
+const HEAVY_TASK_TIMEOUT = 180000; // 重型任务 (写小说/生成大纲) 3分钟
 
-// --- UUID Polyfill (Prevents crashes on non-secure contexts) ---
+// --- UUID Polyfill ---
+// 防止在非安全上下文(非HTTPS)下 crypto.randomUUID 崩溃
 export const generateId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -21,17 +24,18 @@ export const generateId = (): string => {
   });
 };
 
-// --- Safe Env Access (Prevents ReferenceError: process is not defined) ---
+// --- 安全的环境变量获取 ---
+// 防止在某些构建环境(如Vercel Edge)下 process is not defined 导致崩溃
 const getEnvVar = (key: string): string | undefined => {
     try {
-        // Check standard process.env (Node/Webpack)
+        // 检查标准 Node/Webpack process.env
         if (typeof process !== 'undefined' && process.env) {
             return process.env[key];
         }
     } catch (e) {}
     
     try {
-        // Check Vite import.meta.env
+        // 检查 Vite import.meta.env
         // @ts-ignore
         if (typeof import.meta !== 'undefined' && import.meta.env) {
             // @ts-ignore
@@ -42,22 +46,23 @@ const getEnvVar = (key: string): string | undefined => {
     return undefined;
 };
 
-// --- Helper to get Effective Gemini Key ---
+// --- 获取有效的 API Key ---
 const getGeminiKey = (settings?: AppSettings) => {
     return settings?.apiKey || getEnvVar('API_KEY') || DEFAULT_GEMINI_KEY;
 };
 
-// --- Helper to get Client (Gemini) ---
+// --- 获取 Gemini 客户端实例 ---
 const getClient = (settings?: AppSettings) => {
     const apiKey = getGeminiKey(settings);
     if (!apiKey) throw new Error("No API Key");
     return new GoogleGenAI({ apiKey });
 };
 
-// --- Helper for Timeout ---
+// --- 超时 Promise 辅助函数 ---
 const timeoutPromise = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), ms));
 
-// --- OpenRouter Fetch Helper ---
+// --- OpenRouter 调用辅助函数 ---
+// 用于支持除 Gemini 之外的模型 (如果用户配置了)
 async function callOpenRouter(
     settings: AppSettings | undefined,
     messages: { role: string, content: string }[],
@@ -95,7 +100,8 @@ async function callOpenRouter(
     return jsonMode ? safeJsonParse(content, {}) : content;
 }
 
-// --- Retry Helper ---
+// --- 重试逻辑辅助函数 ---
+// 处理 429 限流或超时错误，自动重试
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 1, baseDelay = 1000): Promise<T> {
@@ -108,7 +114,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1, baseDelay = 1000)
       error?.message?.includes('429') || 
       error?.message?.includes('quota');
 
-    // Also retry on timeouts
+    // 同时重试超时错误
     const isTimeout = error?.message === "Request timed out" || error?.message?.includes("timed out");
 
     if ((isRateLimit || isTimeout) && retries > 0) {
@@ -121,15 +127,16 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1, baseDelay = 1000)
 }
 
 /**
- * Robust JSON Parser to prevent crashes (Black Screen Fix)
+ * 健壮的 JSON 解析器
+ * 修复部分模型输出Markdown代码块 (```json) 导致解析失败的问题
  */
 const safeJsonParse = <T>(text: string, fallback: T): T => {
   if (!text) return fallback;
   try {
     let clean = text.trim();
-    // Remove markdown code blocks
+    // 移除 markdown 代码块标记
     clean = clean.replace(/```json/g, '').replace(/```/g, '');
-    // Remove potential leading/trailing garbage
+    // 截取第一个 { 到最后一个 } 之间的内容，去除首尾无关字符
     const firstBrace = clean.indexOf('{');
     const lastBrace = clean.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
@@ -143,7 +150,7 @@ const safeJsonParse = <T>(text: string, fallback: T): T => {
 };
 
 /**
- * Check and request Veo Key
+ * 检查并请求 Veo 视频生成权限 (API Key)
  */
 const ensureVeoKey = async () => {
   if (typeof window !== 'undefined' && (window as any).aistudio) {
@@ -159,16 +166,16 @@ const ensureVeoKey = async () => {
 };
 
 /**
- * Generate Image Tool Implementation
+ * 工具函数：生成图片
  */
 const generateImageTool = async (prompt: string, settings?: AppSettings) => {
     const ai = getClient(settings);
-    // Use flash-image for chat generation (fast)
+    // 使用 flash-image 进行快速生成
     const response = await ai.models.generateContent({
         model: IMAGE_MODEL,
         contents: { parts: [{ text: prompt }] },
         config: {
-             // Basic config
+             // 基础配置
         }
     });
     
@@ -180,10 +187,10 @@ const generateImageTool = async (prompt: string, settings?: AppSettings) => {
 };
 
 /**
- * Generate Video Tool Implementation
+ * 工具函数：生成视频 (调用 Veo 模型)
  */
 const generateVideoTool = async (prompt: string, settings?: AppSettings) => {
-    // Check key for Veo
+    // 必须确保 Veo Key 已选择
     await ensureVeoKey();
     
     const ai = getClient(settings);
@@ -198,10 +205,10 @@ const generateVideoTool = async (prompt: string, settings?: AppSettings) => {
         }
     });
 
-    // Poll for completion
+    // 轮询等待视频生成完成 (Veo 生成需要时间)
     let attempts = 0;
-    while (!operation.done && attempts < 60) { // Max 5 mins
-        await wait(5000); // Poll every 5 seconds
+    while (!operation.done && attempts < 60) { // 最多等待 5 分钟
+        await wait(5000); // 每 5 秒轮询一次
         operation = await ai.operations.getVideosOperation({ operation: operation });
         attempts++;
     }
@@ -209,7 +216,7 @@ const generateVideoTool = async (prompt: string, settings?: AppSettings) => {
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!videoUri) throw new Error("Video generation failed or returned no URI");
 
-    // Fetch the video data using the API Key to display it
+    // 使用 API Key 获取视频二进制数据
     const apiKey = getGeminiKey(settings);
     const fetchUrl = `${videoUri}&key=${apiKey}`;
     
@@ -218,7 +225,7 @@ const generateVideoTool = async (prompt: string, settings?: AppSettings) => {
     return URL.createObjectURL(blob);
 };
 
-// --- CHAT TOOLS DEFINITION ---
+// --- 聊天工具定义 (Function Calling) ---
 const chatTools: Tool[] = [
   {
     functionDeclarations: [
@@ -256,7 +263,8 @@ const chatTools: Tool[] = [
 
 
 /**
- * Chat with a Character (Companion Mode) with memory and TOOLS.
+ * 核心功能：与角色聊天 (陪伴模式)
+ * 支持工具调用 (生成图片/视频) 和 长期记忆注入
  */
 export const chatWithCharacter = async (
     character: GlobalCharacter, 
@@ -264,9 +272,7 @@ export const chatWithCharacter = async (
     userMessage: string,
     settings?: AppSettings
 ): Promise<{ text: string, mediaUrl?: string, mediaType?: 'image' | 'video' }> => {
-    // Tool calling logic only supported via Google Gen AI directly right now for this implementation
-    // If OpenRouter is selected, we fall back to text only or need complex handling.
-    // For this update, if OpenRouter is active, we just do text.
+    // 如果使用 OpenRouter，目前降级为纯文本，因为工具调用协议不同
     if (settings?.activeProvider === 'OPENROUTER') {
         const text = await callOpenRouter(settings, [
              { role: "system", content: `Roleplay as ${character.name}. ${character.personality}` },
@@ -276,12 +282,13 @@ export const chatWithCharacter = async (
     }
 
     return withRetry(async () => {
-        // Limit history for context window but include memories
+        // 限制上下文窗口 (最近15条)，但注入长期记忆
         const recentHistory = history.slice(-15).map(m => {
             const roleLabel = m.role === 'user' ? 'User' : character.name;
             return `${roleLabel}: ${m.content}`;
         }).join('\n');
         
+        // 注入长期记忆
         const memoriesContext = (character.memories && character.memories.length > 0) 
             ? `LONG-TERM MEMORIES/FACTS:\n${character.memories.join('\n')}` 
             : "";
@@ -314,7 +321,7 @@ export const chatWithCharacter = async (
             }
         });
 
-        // Check for function calls
+        // 检查是否有函数调用 (Function Calls)
         const functionCalls = response.functionCalls;
         if (functionCalls && functionCalls.length > 0) {
             const call = functionCalls[0];
@@ -352,7 +359,8 @@ export const chatWithCharacter = async (
 };
 
 /**
- * Evolves Character based on recent chat (Memory & Optimization).
+ * 角色进化逻辑
+ * 分析最近的聊天记录，提取记忆，并微调角色的性格和语言风格
  */
 export const evolveCharacterFromChat = async (
     character: GlobalCharacter,
@@ -360,7 +368,7 @@ export const evolveCharacterFromChat = async (
     settings?: AppSettings
 ): Promise<{ newPersonality: string, newSpeakingStyle: string, memory: string }> => {
     return withRetry(async () => {
-        // Only analyze the last session (up to 20 messages)
+        // 仅分析最近的会话 (最多20条)
         const transcript = recentMessages.slice(-20).map(m => `${m.role}: ${m.content}`).join("\n");
         
         const prompt = `
@@ -406,7 +414,7 @@ export const evolveCharacterFromChat = async (
                         }
                     }
                 }),
-                timeoutPromise(30000) // Increased to 30s
+                timeoutPromise(30000) // 超时设置 30s
             ]) as any;
             data = safeJsonParse(response.text || "{}", {});
         }
@@ -420,8 +428,9 @@ export const evolveCharacterFromChat = async (
 };
 
 /**
- * Generates the initial script structure with richer plots, incorporating Pre-Defined Characters.
- * UPDATED: Uses HEAVY_TASK_TIMEOUT and emphasizes sequential logic.
+ * 生成剧本蓝图 (Script Blueprint)
+ * 根据用户的一句话灵感，扩展成完整的世界观、角色表和分章节大纲。
+ * 使用了策略模式 (Strategy Pattern) 来支持 OpenRouter。
  */
 export const generateScriptBlueprint = async (
     prompt: string, 
@@ -432,6 +441,7 @@ export const generateScriptBlueprint = async (
   return withRetry(async () => {
     const langInstruction = lang === 'zh-CN' ? "Respond entirely in Simplified Chinese." : "Respond in English.";
     
+    // 构建预设角色上下文，确保 AI 在剧本中包含用户选中的角色
     let charContext = "";
     if (predefinedCharacters.length > 0) {
         charContext = `
@@ -455,7 +465,7 @@ export const generateScriptBlueprint = async (
       ${langInstruction}
     `;
 
-    // Strategy Pattern: Check Provider
+    // 策略模式: 检查是否使用 OpenRouter
     if (settings?.activeProvider === 'OPENROUTER') {
         const jsonSchemaDesc = `
         Return valid JSON with this structure:
@@ -476,7 +486,7 @@ export const generateScriptBlueprint = async (
         return processScriptData(data, prompt, predefinedCharacters);
     }
 
-    // Default: Gemini
+    // 默认: Gemini API
     const ai = getClient(settings);
     const response = await Promise.race([
         ai.models.generateContent({
@@ -511,7 +521,7 @@ export const generateScriptBlueprint = async (
                 }
             }
         }),
-        timeoutPromise(HEAVY_TASK_TIMEOUT) // Increased to 180s
+        timeoutPromise(HEAVY_TASK_TIMEOUT) // 增加到 180s
     ]) as any;
 
     const data = safeJsonParse(response.text || "{}", {});
@@ -519,22 +529,22 @@ export const generateScriptBlueprint = async (
   });
 };
 
-// Helper to normalize script data from any provider
+// 辅助函数：标准化剧本数据，处理生成的角色与预设角色的合并
 const processScriptData = (data: any, originalPrompt: string, preDefinedChars: GlobalCharacter[]) => {
-    // Robust check for characters array
+    // 健壮性检查
     const rawChars = Array.isArray(data.characters) ? data.characters : [];
     
-    // Map generated characters to existing globals if names match (fuzzy match)
+    // 将生成的角色映射回全局角色 (如果名称匹配)，保持 ID 一致性
     const characters = rawChars.map((c: any) => {
-        // Check if this generated char matches a predefined global char
+        // 模糊匹配名称
         const match = preDefinedChars.find(pc => pc.name.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(pc.name.toLowerCase()));
         
         if (match) {
             return {
-                id: generateId(), // Safe UUID
-                name: match.name, // Enforce global name
+                id: generateId(), // 新的剧本内 ID
+                name: match.name, // 强制使用全局名称
                 role: c.role || "Role",
-                personality: match.personality, // Enforce global personality
+                personality: match.personality, // 强制使用全局性格
                 speakingStyle: match.speakingStyle,
                 visualDescription: match.visualDescription,
                 avatarUrl: match.avatarUrl,
@@ -571,9 +581,9 @@ const processScriptData = (data: any, originalPrompt: string, preDefinedChars: G
 };
 
 /**
- * Completes a Global Character Profile based on partial input.
- * Specialized for "Name-First" creation.
- * Updated: Focuses primarily on Personality and Speaking Style.
+ * 补全角色档案 (Magic Fill)
+ * 专为 "先输入名字" 的创建流程设计。
+ * 会识别名人/动漫角色，并自动填补性格和语言风格。
  */
 export const completeCharacterProfile = async (partialChar: Partial<GlobalCharacter>, settings?: AppSettings): Promise<Partial<GlobalCharacter>> => {
     return withRetry(async () => {
@@ -621,7 +631,7 @@ export const completeCharacterProfile = async (partialChar: Partial<GlobalCharac
                         }
                     }
                 }),
-                timeoutPromise(30000) // Increased to 30s
+                timeoutPromise(30000) // 增加到 30s
             ]) as any;
             data = safeJsonParse(response.text || "{}", {});
         }
@@ -639,7 +649,7 @@ export const completeCharacterProfile = async (partialChar: Partial<GlobalCharac
 };
 
 /**
- * Generates a single new character that fits the script.
+ * 自动生成一个新配角，用于丰富当前剧本。
  */
 export const generateSingleCharacter = async (script: Script, settings?: AppSettings): Promise<Character> => {
     return withRetry(async () => {
@@ -692,7 +702,8 @@ export const generateSingleCharacter = async (script: Script, settings?: AppSett
 };
 
 /**
- * RECONSTRUCTS the future plot based on a Director Command (God Mode).
+ * 上帝模式 (God Mode) 重构未来剧情
+ * 根据用户的突发指令 (Director Command) 重新规划后续的所有剧情节点。
  */
 export const regenerateFuturePlot = async (
     script: Script, 
@@ -738,8 +749,8 @@ export const regenerateFuturePlot = async (
 };
 
 /**
- * Suggests the NEXT chapter plan based on what just happened.
- * Allows AI to pivot instead of blindly following the original outline.
+ * 策划下一章节 (Next Chapter Plan)
+ * 根据当前的演绎进度，AI 提议下一章的具体目标。允许用户在进入下一章前进行干预。
  */
 export const generateNextChapterPlan = async (
     script: Script, 
@@ -777,8 +788,9 @@ export const generateNextChapterPlan = async (
 };
 
 /**
- * Auto-Completes the story by generating narration for ALL remaining plot points.
- * UPDATED: Uses HEAVY_TASK_TIMEOUT to prevent "Request timed out" on long stories.
+ * 快速完结故事 (Fast Forward)
+ * AI 为剩余的每一个章节生成一段旁白总结，快速推进到结局。
+ * 使用 HEAVY_TASK_TIMEOUT 防止超时。
  */
 export const autoCompleteStory = async (
     script: Script,
@@ -821,7 +833,7 @@ export const autoCompleteStory = async (
                         }
                     }
                 }),
-                timeoutPromise(HEAVY_TASK_TIMEOUT) // 3 minutes
+                timeoutPromise(HEAVY_TASK_TIMEOUT) // 3 分钟
             ]) as any;
             data = safeJsonParse(response.text || "{}", {});
         }
@@ -838,8 +850,8 @@ export const autoCompleteStory = async (
 };
 
 /**
- * Generates a full Novel version of the script history in a specific style.
- * UPDATED: Uses HEAVY_TASK_TIMEOUT to prevent "Request timed out".
+ * 生成小说版本 (Novel Export)
+ * 将剧本的对话和动作历史，重写为指定风格的散文小说。
  */
 export const generateNovelVersion = async (
     script: Script,
@@ -847,8 +859,7 @@ export const generateNovelVersion = async (
     settings?: AppSettings
 ): Promise<string> => {
     return withRetry(async () => {
-        // We use the whole history if possible, or a large chunk. 
-        // Gemini has a large context window, so we try to pass most of it.
+        // 尽可能传入全部历史
         const fullHistory = script.history.map(h => {
             const charName = script.characters.find(c => c.id === h.characterId)?.name || "Narrator";
             return `${charName}: ${h.content}`;
@@ -886,7 +897,7 @@ export const generateNovelVersion = async (
                     model: TEXT_MODEL,
                     contents: promptText
                 }),
-                timeoutPromise(HEAVY_TASK_TIMEOUT) // 3 minutes
+                timeoutPromise(HEAVY_TASK_TIMEOUT) // 3 分钟
             ]) as any;
             return response.text || "Failed to generate novel.";
         }
@@ -894,7 +905,8 @@ export const generateNovelVersion = async (
 };
 
 /**
- * Refines text (Standard).
+ * 文本润色 (AI Refine)
+ * 优化用户输入的一段文字，使其更具戏剧性。
  */
 export const refineText = async (
   currentText: string, 
@@ -927,8 +939,8 @@ export const refineText = async (
 };
 
 /**
- * Determines the next turn in the story.
- * OPTIMIZED: Reduced context window and simplified instructions for speed.
+ * 生成下一个剧情节拍 (Generate Next Beat)
+ * 游戏循环的核心。决定下一个说话的角色、内容或旁白。
  */
 export const generateNextBeat = async (
     script: Script, 
@@ -940,7 +952,7 @@ export const generateNextBeat = async (
   return withRetry(async () => {
     const langInstruction = lang === 'zh-CN' ? "Language: Simplified Chinese." : "Language: English.";
     
-    // Optimization: Only last 10 messages for context speed
+    // 优化：仅取最近 10 条历史以加快推理速度
     const recentHistory = script.history.slice(-10);
     const historyText = recentHistory.map(m => {
       const charName = script.characters.find(c => c.id === m.characterId)?.name || "Narrator";
@@ -959,7 +971,6 @@ export const generateNextBeat = async (
         promptContext = `Goal: "${currentGoal}". Move story forward.`;
     }
 
-    // Optimization: Shorter prompt
     const promptText = `
       Title: ${script.title}
       Chars: ${characterProfiles}
@@ -980,8 +991,7 @@ export const generateNextBeat = async (
           contents: promptText,
           config: {
             responseMimeType: "application/json",
-            // Optimization: Remove strict schema definition if not strictly needed can speed up token generation sometimes, 
-            // but for reliability we keep it simple.
+            // 优化：移除严格的Schema定义有时能加快Token生成
             responseSchema: {
               type: Type.OBJECT,
               properties: {
@@ -1013,11 +1023,10 @@ export const generateNextBeat = async (
 };
 
 /**
- * Generates an avatar. 
+ * 生成头像
  */
 export const generateAvatarImage = async (character: Character | GlobalCharacter, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
-    // Always use Google Client for images (supports default key)
     const ai = getClient(settings); 
     const prompt = `Portrait of ${character.name}, ${character.gender || ''}, ${character.age || ''}. ${character.visualDescription}. High quality, stylized avatar, headshot.`;
     
@@ -1035,11 +1044,10 @@ export const generateAvatarImage = async (character: Character | GlobalCharacter
 };
 
 /**
- * Generates a scene illustration.
+ * 生成场景插图 (Scene Illustration)
  */
 export const generateSceneImage = async (sceneDescription: string, scriptTitle: string, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
-    // Always use Google Client for images
     const ai = getClient(settings);
     const desc = sceneDescription.length > 300 ? sceneDescription.substring(0, 300) : sceneDescription;
     const prompt = `Cinematic shot, ${scriptTitle}, ${desc}. 4k, detailed, atmospheric.`;

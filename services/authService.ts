@@ -1,13 +1,14 @@
 import { User, Script, GlobalCharacter, ChatSession } from "../types";
 
-// Keys for local storage
+// 本地存储的 Key 常量
+// 我们使用 LocalStorage 来模拟后端数据库
 const USERS_KEY = 'skena_users';
 const CURRENT_USER_KEY = 'skena_current_user';
 const SCRIPTS_KEY = 'skena_all_scripts';
 const CHARACTERS_KEY = 'skena_global_characters';
 const CHATS_KEY = 'skena_chat_sessions';
 
-// Simple UUID polyfill to avoid importing from aiService and causing cycles or load issues
+// 简易 UUID 生成器 (避免循环引用 aiService)
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -19,7 +20,7 @@ const generateId = (): string => {
 };
 
 export const authService = {
-  // Register a new user
+  // 注册新用户
   register: (username: string): User => {
     const usersStr = localStorage.getItem(USERS_KEY);
     const users: User[] = usersStr ? JSON.parse(usersStr) : [];
@@ -36,11 +37,11 @@ export const authService = {
 
     users.push(newUser);
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(newUser)); // Auto login
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(newUser)); // 注册后自动登录
     return newUser;
   },
 
-  // Login existing user
+  // 登录现有用户
   login: (username: string): User => {
     const usersStr = localStorage.getItem(USERS_KEY);
     const users: User[] = usersStr ? JSON.parse(usersStr) : [];
@@ -63,11 +64,12 @@ export const authService = {
     return u ? JSON.parse(u) : null;
   },
 
-  // --- Script Management ---
+  // --- 剧本管理 (模拟数据库 CRUD) ---
   saveScripts: (userId: string, scripts: Script[]) => {
     const allScriptsStr = localStorage.getItem(SCRIPTS_KEY);
     let allScripts: Script[] = allScriptsStr ? JSON.parse(allScriptsStr) : [];
     
+    // 过滤掉当前用户的旧数据，合并新数据
     const otherScripts = allScripts.filter(s => s.ownerId !== userId);
     const updatedStore = [...otherScripts, ...scripts];
     
@@ -82,7 +84,7 @@ export const authService = {
     return allScripts.filter(s => s.ownerId === userId);
   },
 
-  // --- Global Character Management ---
+  // --- 全局角色管理 ---
   saveGlobalCharacters: (userId: string, chars: GlobalCharacter[]) => {
     const allCharsStr = localStorage.getItem(CHARACTERS_KEY);
     let allChars: GlobalCharacter[] = allCharsStr ? JSON.parse(allCharsStr) : [];
@@ -101,7 +103,7 @@ export const authService = {
     return allChars.filter(c => c.ownerId === userId);
   },
 
-  // --- Chat Session Management ---
+  // --- 聊天会话管理 (陪伴模式) ---
   saveChatSession: (session: ChatSession) => {
     const allChatsStr = localStorage.getItem(CHATS_KEY);
     let allChats: ChatSession[] = allChatsStr ? JSON.parse(allChatsStr) : [];

@@ -9,7 +9,7 @@ import {
   Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit, Video,
   Filter, FileText, Book, CheckCircle
 } from 'lucide-react';
-import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage, NovelStyle } from './types';
+import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatMessage, ChatSession, NovelStyle } from './types';
 import { 
     generateScriptBlueprint, generateNextBeat, generateAvatarImage, 
     refineText, generateSceneImage, regenerateFuturePlot, generateSingleCharacter,
@@ -18,7 +18,7 @@ import {
 } from './services/aiService';
 import { authService } from './services/authService';
 
-// --- Safe UUID Polyfill (Inline to avoid import issues on crash) ---
+// --- Safe UUID Polyfill (避免崩溃) ---
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -29,7 +29,7 @@ const generateId = (): string => {
   });
 };
 
-// --- Character Text Colors (Pastel Palette) ---
+// --- 角色气泡颜色映射 ---
 const CHAR_COLORS = [
     '#fca5a5', // red-300
     '#86efac', // green-300
@@ -44,7 +44,7 @@ const CHAR_COLORS = [
 ];
 
 const getCharacterColor = (charId: string) => {
-    if (charId === 'narrator') return '#fbbf24'; // Amber for narrator
+    if (charId === 'narrator') return '#fbbf24'; // 旁白用琥珀色
     let hash = 0;
     for (let i = 0; i < charId.length; i++) {
         hash = charId.charCodeAt(i) + ((hash << 5) - hash);
@@ -53,7 +53,7 @@ const getCharacterColor = (charId: string) => {
     return CHAR_COLORS[index];
 };
 
-// --- Logo Component ---
+// --- Logo 组件 ---
 const Logo = ({ className = "" }: { className?: string }) => (
     <div className={`flex items-center gap-2 ${className}`}>
         <div className="relative w-8 h-8 flex items-center justify-center">
@@ -64,7 +64,7 @@ const Logo = ({ className = "" }: { className?: string }) => (
     </div>
 );
 
-// --- i18n Dictionary ---
+// --- 国际化字典 (i18n) ---
 const TRANSLATIONS = {
   'zh-CN': {
     title: "Daydreaming",
@@ -304,7 +304,7 @@ const INITIAL_ACHIEVEMENTS: Achievement[] = [
   { id: '5', title: '造梦师', description: '创建一个模版', icon: '📐', conditionType: 'TEMPLATE_CREATE', threshold: 1, unlocked: false },
 ];
 
-// --- Components ---
+// --- 基础 UI 组件 ---
 
 const Button = ({ 
   children, onClick, variant = 'primary', className = '', disabled = false, icon: Icon, size = 'md' 
@@ -339,6 +339,7 @@ const Avatar = ({ url, name, size = 'md' }: { url?: string, name: string, size?:
   );
 };
 
+// 智能输入框 (带 AI 辅助按钮)
 const SmartTextarea = ({
   value, onChange, onAIRequest, label, rows = 3, placeholder = ""
 }: {
@@ -364,15 +365,15 @@ const SmartTextarea = ({
   );
 };
 
-// --- Main App ---
+// --- 主程序入口 ---
 
 export default function App() {
-  // --- Auth State ---
+  // --- 认证状态 ---
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
   const [authInput, setAuthInput] = useState('');
 
-  // --- Config State ---
+  // --- 配置状态 ---
   const [lang, setLang] = useState<Language>('zh-CN');
   const [showSettings, setShowSettings] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
@@ -380,10 +381,10 @@ export default function App() {
     return saved ? JSON.parse(saved) : { apiKey: '', activeProvider: 'GEMINI' };
   });
 
-  // --- App View State ---
+  // --- 视图状态 ---
   const [view, setView] = useState<'DASHBOARD' | 'EDITOR' | 'STAGE' | 'CHAT'>('DASHBOARD');
   const [editorStep, setEditorStep] = useState<1 | 2>(1);
-  // Default to CHARACTERS based on user feedback to make it more prominent
+  // 默认为 CHARACTERS (角色库)
   const [dashboardTab, setDashboardTab] = useState<'SCRIPTS' | 'TEMPLATES' | 'CHARACTERS' | 'COMMUNITY' | 'ACHIEVEMENTS'>('CHARACTERS');
   const [scripts, setScripts] = useState<Script[]>([]);
   const [globalCharacters, setGlobalCharacters] = useState<GlobalCharacter[]>([]);
@@ -392,30 +393,30 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_ACHIEVEMENTS;
   });
 
-  // --- Character Filter State ---
+  // --- 角色过滤器状态 ---
   const [characterFilter, setCharacterFilter] = useState('ALL');
 
-  // --- Selection State for New Script ---
+  // --- 新建剧本时的角色选择状态 ---
   const [selectedCastIds, setSelectedCastIds] = useState<string[]>([]);
   const [showCastSelector, setShowCastSelector] = useState(false);
 
-  // --- Character Editor Modal State ---
+  // --- 角色编辑模态框状态 ---
   const [editingChar, setEditingChar] = useState<Partial<GlobalCharacter> | null>(null);
   const [showCharModal, setShowCharModal] = useState(false);
   const [isCharAutoFilling, setIsCharAutoFilling] = useState(false);
   const [isAvatarGenerating, setIsAvatarGenerating] = useState(false);
 
-  // --- Chat State ---
+  // --- 聊天状态 (陪伴模式) ---
   const [activeChatSession, setActiveChatSession] = useState<ChatSession | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
-  const [sessionUpdated, setSessionUpdated] = useState(false); // Track if we need to summarize on exit
+  const [sessionUpdated, setSessionUpdated] = useState(false); // 标记会话是否有更新，用于退出时总结记忆
 
   const [currentScript, setCurrentScript] = useState<Script | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [promptInput, setPromptInput] = useState('');
   
-  // --- Stage/Director State ---
+  // --- 舞台/导演状态 ---
   const [isPlaying, setIsPlaying] = useState(false);
   const [turnProcessing, setTurnProcessing] = useState(false);
   const [userInputs, setUserInputs] = useState<{[key: string]: string}>({});
@@ -423,7 +424,7 @@ export default function App() {
   const [isReconstructing, setIsReconstructing] = useState(false);
   const [isFastForwarding, setIsFastForwarding] = useState(false);
   
-  // --- New Stage Modal States ---
+  // --- 章节策划模态框状态 ---
   const [showChapterPlanner, setShowChapterPlanner] = useState(false);
   const [nextChapterPlan, setNextChapterPlan] = useState('');
   const [isPlanning, setIsPlanning] = useState(false);
@@ -433,7 +434,7 @@ export default function App() {
   const [isGeneratingNovel, setIsGeneratingNovel] = useState(false);
   const [autoCompleteNovel, setAutoCompleteNovel] = useState(false);
   
-  // Director Queue Buffer for God Mode
+  // 导演指令队列缓冲区 (God Mode)
   const directorQueueRef = useRef<string[]>([]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -442,7 +443,7 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
 
-  // --- Auth & Data Loading Effects ---
+  // --- 初始化与数据加载 Effect ---
   useEffect(() => {
     const user = authService.getCurrentUser();
     if (user) {
@@ -476,24 +477,27 @@ export default function App() {
     }
   }, [activeChatSession?.messages, view]);
 
-  // --- Game Loop (OPTIMIZED) ---
+  // --- 游戏主循环 (Game Loop) ---
+  // 负责驱动剧情的自动演绎，每隔500ms检查是否需要生成下一条内容
   useEffect(() => {
     if (!currentScript || view !== 'STAGE') return;
-    if (!isPlaying && !turnProcessing && !isReconstructing) { /* Idle */ }
+    if (!isPlaying && !turnProcessing && !isReconstructing) { /* 空闲状态 */ }
     if (turnProcessing || isReconstructing || !isPlaying || isFastForwarding) return;
 
     const gameLoop = async () => {
       setTurnProcessing(true);
       try {
-        // God Mode Check
+        // God Mode 检查: 如果导演队列中有指令，优先处理
         let forcedCommand = null;
         if (directorQueueRef.current.length > 0) {
             forcedCommand = directorQueueRef.current.shift() || null;
             if (forcedCommand) {
                 setIsPlaying(false);
                 setIsReconstructing(true);
+                // 重构后续剧情
                 const newPlot = await regenerateFuturePlot(currentScript, forcedCommand, appSettings);
                 updateScriptState({ ...currentScript, plotPoints: newPlot });
+                // 插入系统消息
                 const dirMsg: Message = {
                     id: generateId(), characterId: 'narrator', content: `[SYSTEM OVERRIDE]: ${forcedCommand}`, type: 'narration', timestamp: Date.now()
                 };
@@ -508,24 +512,24 @@ export default function App() {
         const currentPlotIndex = currentScript.currentPlotIndex || 0;
         const targetPlot = currentScript.plotPoints[currentPlotIndex] || currentScript.plotPoints[currentScript.plotPoints.length - 1];
 
-        // 1. Generate Text (Fast)
+        // 1. 生成文本 (AI 决定下一个说话的人和内容)
         const nextBeat = await generateNextBeat(currentScript, forcedCommand, targetPlot, lang, appSettings);
         
-        // 2. Add Message Immediately
+        // 2. 立即添加消息到历史记录
         const newMessage: Message = {
           id: generateId(), characterId: nextBeat.characterId,
           content: nextBeat.content, type: nextBeat.type, timestamp: Date.now()
         };
         handleUpdateScriptHistory(newMessage);
 
-        // 3. Generate Image Asynchronously (Non-blocking) if narration
+        // 3. 异步生成场景图片 (如果是旁白且不阻塞主流程)
         if (nextBeat.type === 'narration') {
             generateSceneImage(nextBeat.content, currentScript.title, appSettings).then(url => {
                  setScripts(prev => prev.map(s => {
                      if (s.id === currentScript.id) {
                          const updatedHistory = s.history.map(m => m.id === newMessage.id ? { ...m, imageUrl: url } : m);
                          const updatedScript = { ...s, history: updatedHistory };
-                         if (currentScript.id === s.id) setCurrentScript(updatedScript); // update active state if match
+                         if (currentScript.id === s.id) setCurrentScript(updatedScript); // 更新当前状态
                          return updatedScript;
                      }
                      return s;
@@ -541,13 +545,13 @@ export default function App() {
       }
     };
     
-    // Aggressive loop speed for responsiveness
+    // 激进的循环速度以保持响应性
     const timer = setTimeout(gameLoop, 500);
     return () => clearTimeout(timer);
   }, [isPlaying, currentScript, view, turnProcessing, lang, appSettings, isReconstructing, isFastForwarding]);
 
 
-  // --- Handlers ---
+  // --- 事件处理函数 ---
 
   const handleLogin = () => {
     if (!authInput.trim()) return;
@@ -603,7 +607,7 @@ export default function App() {
     });
   };
 
-  // --- Global Character Management ---
+  // --- 全局角色管理 (CRUD) ---
 
   const openNewCharacterModal = () => {
       setEditingChar({
@@ -636,7 +640,7 @@ export default function App() {
           memories: editingChar.memories || []
       };
 
-      // Check if updating
+      // 检查是更新还是新建
       const exists = globalCharacters.find(c => c.id === newChar.id);
       if (exists) {
           setGlobalCharacters(prev => prev.map(c => c.id === newChar.id ? newChar : c));
@@ -644,7 +648,7 @@ export default function App() {
           setGlobalCharacters(prev => [...prev, newChar]);
       }
       
-      // Generate avatar if missing
+      // 如果没有头像，生成一个
       if (!newChar.avatarUrl) {
           try {
              const url = await generateAvatarImage(newChar, appSettings);
@@ -656,6 +660,7 @@ export default function App() {
       setEditingChar(null);
   };
 
+  // AI 自动补全角色设定
   const handleAICompleteChar = async () => {
       if (!editingChar || !editingChar.name) {
           showNotification("Hint", "Please enter a name first!", "error");
@@ -664,7 +669,7 @@ export default function App() {
       setIsCharAutoFilling(true);
       try {
           const filled = await completeCharacterProfile(editingChar, appSettings);
-          // If the AI returned emptiness (unlikely with retry, but possible with timeout), we should not wipe existing data
+          // 保留已有数据，只填充空白
           setEditingChar(prev => ({
               ...prev,
               ...filled
@@ -681,7 +686,6 @@ export default function App() {
       if (!editingChar || !editingChar.visualDescription) return;
       setIsAvatarGenerating(true);
       try {
-          // Temporarily construct a Character-like object
           const tempChar: any = { ...editingChar };
           const url = await generateAvatarImage(tempChar, appSettings);
           setEditingChar(prev => ({...prev, avatarUrl: url}));
@@ -703,7 +707,7 @@ export default function App() {
       }
   };
 
-  // --- Companion Chat ---
+  // --- 陪伴聊天逻辑 ---
   
   const handleOpenChat = (char: GlobalCharacter) => {
       if (!currentUser) return;
@@ -728,7 +732,7 @@ export default function App() {
           return;
       }
 
-      // If we had a conversation, let's optimize the character!
+      // 如果有实质性对话，进行角色进化！
       if (sessionUpdated && activeChatSession.messages.length > 2) {
           const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
           if (char) {
@@ -743,7 +747,7 @@ export default function App() {
                       memories: evolution.memory ? [...(char.memories || []), evolution.memory] : char.memories
                   };
                   
-                  // Update global chars
+                  // 更新全局角色
                   setGlobalCharacters(prev => prev.map(c => c.id === updatedChar.id ? updatedChar : c));
                   showNotification(t.memories, t.memorySaved, 'success');
               } catch (e) {
@@ -803,16 +807,16 @@ export default function App() {
       }
   };
 
-  // --- Script Gen Logic ---
+  // --- 剧本生成逻辑 ---
 
   const handleCreateScript = async () => {
     if (!currentUser) return;
     if (!promptInput.trim()) return;
     setIsGenerating(true);
-    setShowCastSelector(false); // Close dropdown if open
+    setShowCastSelector(false); // 关闭选择器
     
     try {
-      // Find selected global chars
+      // 找到选中的全局角色
       const cast = globalCharacters.filter(c => selectedCastIds.includes(c.id));
       
       const blueprint = await generateScriptBlueprint(promptInput, cast, lang, appSettings);
@@ -844,7 +848,7 @@ export default function App() {
       setPromptInput('');
       setSelectedCastIds([]);
       
-      // Auto-generate avatars only for non-global chars (global chars already have avatars)
+      // 仅为非全局角色自动生成头像 (全局角色已有头像)
       newScript.characters.forEach(c => {
           if (!c.isGlobal) handleGenerateAvatar(c, newScript.id);
       });
@@ -893,7 +897,7 @@ export default function App() {
       const newChar: Character = {
           id: generateId(),
           name: globalChar.name,
-          role: "Extra", // Default role, user can edit
+          role: "Extra", // 默认角色，用户可编辑
           personality: globalChar.personality,
           speakingStyle: globalChar.speakingStyle,
           visualDescription: globalChar.visualDescription,
@@ -932,11 +936,11 @@ export default function App() {
     if (!isPlaying) setIsPlaying(true);
   };
 
-  // --- Chapter Planner Logic ---
+  // --- 章节策划逻辑 (Chapter Planner) ---
 
   const handleNextChapter = async () => {
     if (!currentScript) return;
-    setIsPlaying(false); // Pause first
+    setIsPlaying(false); // 先暂停
     
     const currentIndex = currentScript.currentPlotIndex || 0;
     if (currentIndex >= currentScript.plotPoints.length - 1) {
@@ -981,7 +985,7 @@ export default function App() {
       };
       updateScriptState(updatedScript);
       
-      // Add a visual separator for the chapter
+      // 添加章节分隔符
       const newMessage: Message = { 
           id: generateId(), 
           characterId: 'narrator', 
@@ -1006,7 +1010,7 @@ export default function App() {
           const updatedScript = {
               ...currentScript,
               history: updatedHistory,
-              currentPlotIndex: currentScript.plotPoints.length // Mark as done
+              currentPlotIndex: currentScript.plotPoints.length // 标记为结束
           };
           updateScriptState(updatedScript);
           showNotification("Complete", "Story fast-forwarded successfully!", 'success');
@@ -1019,11 +1023,11 @@ export default function App() {
       }
   };
 
-  // --- Novel Export Logic ---
+  // --- 小说导出逻辑 ---
   
   const handleOpenNovelModal = () => {
       setGeneratedNovelText(currentScript?.novelText || '');
-      // If script is not finished, default to checking auto-complete
+      // 如果剧本未完成，默认勾选自动完结
       if (currentScript && currentScript.currentPlotIndex < currentScript.plotPoints.length) {
           setAutoCompleteNovel(true);
       }
@@ -1036,12 +1040,12 @@ export default function App() {
       try {
           let scriptToProcess = currentScript;
 
-          // 1. Auto Complete First if requested
+          // 1. 如果选中，先自动完结故事
           if (autoCompleteNovel && currentScript.currentPlotIndex < currentScript.plotPoints.length) {
               scriptToProcess = await handleFastForward();
           }
 
-          // 2. Generate Novel
+          // 2. 生成小说文本
           const text = await generateNovelVersion(scriptToProcess, novelStyle, appSettings);
           setGeneratedNovelText(text);
           updateScriptState({ ...scriptToProcess, novelText: text });
@@ -1062,8 +1066,9 @@ export default function App() {
       element.click();
   };
 
-  // --- Views ---
+  // --- 视图渲染 (Views) ---
 
+  // 登录界面
   if (!currentUser) {
     return (
       <div className="h-screen w-full bg-zinc-950 flex flex-col items-center justify-center relative overflow-hidden">
@@ -1096,6 +1101,7 @@ export default function App() {
     );
   }
 
+  // 大厅视图
   const renderDashboard = () => (
     <div className="h-screen bg-zinc-950 flex flex-col items-center relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -1122,7 +1128,7 @@ export default function App() {
             <div className="w-full max-w-2xl relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-20 transition duration-1000"></div>
               <div className="relative flex flex-col bg-zinc-900/90 backdrop-blur-xl border border-zinc-700/50 rounded-2xl shadow-2xl overflow-hidden">
-                {/* Input Area */}
+                {/* 输入区域 */}
                 <div className="flex items-center p-2">
                     <Sparkles className="text-indigo-400 ml-4 mr-2" />
                     <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateScript()} placeholder={t.placeholder} className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-zinc-500 h-12" />
@@ -1130,7 +1136,7 @@ export default function App() {
                     {isGenerating ? t.dreaming : t.create}
                     </Button>
                 </div>
-                {/* Character Selection */}
+                {/* 角色选择 */}
                 <div className="px-4 pb-2 flex justify-start">
                     <button onClick={() => setShowCastSelector(!showCastSelector)} className="text-xs font-bold text-zinc-500 flex items-center gap-2 hover:text-indigo-400 transition-colors pb-2">
                         <Users size={12} /> {t.selectCharacters} {selectedCastIds.length > 0 && `(${selectedCastIds.length})`}
@@ -1202,7 +1208,7 @@ export default function App() {
                           </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                          {/* Create New Card */}
+                          {/* 新建角色卡片 */}
                           <div onClick={openNewCharacterModal} className="cursor-pointer bg-gradient-to-br from-indigo-900/20 to-zinc-900 border border-indigo-500/30 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 hover:bg-indigo-900/30 transition-all group min-h-[300px]">
                               <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                   <Plus size={32} className="text-indigo-400" />
@@ -1569,7 +1575,7 @@ export default function App() {
     );
   };
 
-  // --- Chapter Planner Modal ---
+  // --- 章节策划模态框 ---
   const renderChapterPlanner = () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden p-6 relative">
@@ -1605,7 +1611,7 @@ export default function App() {
       </div>
   );
 
-  // --- Novel Export Modal ---
+  // --- 小说导出模态框 ---
   const renderNovelModal = () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl h-[85vh] shadow-2xl overflow-hidden flex flex-col">
@@ -1632,7 +1638,7 @@ export default function App() {
                            </div>
                        </div>
                        
-                       {/* Auto Complete Option */}
+                       {/* 自动完结选项 */}
                        {currentScript && currentScript.currentPlotIndex < currentScript.plotPoints.length && (
                            <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 cursor-pointer hover:border-indigo-500/50 transition-all" onClick={() => setAutoCompleteNovel(!autoCompleteNovel)}>
                                <div className="flex items-center gap-3">
@@ -1675,7 +1681,7 @@ export default function App() {
       </div>
   );
 
-
+  // --- 演绎舞台渲染 (Stage) ---
   const renderStage = () => {
     if (!currentScript) return null;
     const userCharacters = (currentScript.characters || []).filter(c => c.isUserControlled);
@@ -1718,7 +1724,7 @@ export default function App() {
             </div>
         )}
 
-        {/* Header Overlay */}
+        {/* 顶部控制栏 */}
         <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
              <div className="flex items-center gap-4">
                  <Button variant="ghost" icon={ChevronLeft} onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }}>{t.exit}</Button>
@@ -1728,12 +1734,8 @@ export default function App() {
                  </div>
              </div>
              <div className="flex gap-2">
-                 {/* New Novel Export Button */}
                  <Button size="sm" variant="secondary" icon={Book} onClick={handleOpenNovelModal}>{t.exportNovel}</Button>
-                 
-                 {/* New Fast Finish Button */}
                  <Button size="sm" variant="secondary" icon={Zap} onClick={() => handleFastForward()} className="text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10">{t.autoComplete}</Button>
-                 
                  <Button size="sm" variant="secondary" icon={SkipForward} onClick={handleNextChapter}>{t.skipChapter}</Button>
                  <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={isPlaying ? Pause : Play} onClick={() => setIsPlaying(!isPlaying)}>
                      {isPlaying ? t.paused : t.resumeAuto}
@@ -1741,7 +1743,7 @@ export default function App() {
              </div>
         </div>
 
-        {/* Scene Background */}
+        {/* 场景背景图 */}
         <div className="absolute inset-0 bg-zinc-900">
              {(() => {
                  const lastImg = [...currentScript.history].reverse().find(m => m.imageUrl);
@@ -1753,7 +1755,7 @@ export default function App() {
              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent"></div>
         </div>
 
-        {/* Script Log */}
+        {/* 剧本演绎日志 */}
         <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-20 space-y-6 mask-image-linear-gradient">
              {currentScript.history.map((msg, idx) => {
                  const char = currentScript.characters.find(c => c.id === msg.characterId);
@@ -1789,11 +1791,11 @@ export default function App() {
              <div ref={chatEndRef} className="h-20" />
         </div>
 
-        {/* Controls */}
+        {/* 底部输入控制 */}
         <div className="relative z-20 p-6 bg-zinc-950/90 border-t border-zinc-800 backdrop-blur-xl">
              <div className="max-w-4xl mx-auto flex flex-col gap-4">
                  
-                 {/* God Mode Input */}
+                 {/* God Mode 输入 */}
                  <div className="flex gap-2 items-center">
                       <div className="bg-amber-500/10 text-amber-500 p-2 rounded-lg">
                           <Crown size={16} />
@@ -1808,7 +1810,7 @@ export default function App() {
                       <button onClick={handleDirectorMessage} disabled={!directorInput} className="text-xs font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 uppercase tracking-wider">{t.inject}</button>
                  </div>
 
-                 {/* User Roleplay Inputs (if any active characters) */}
+                 {/* 用户扮演角色输入框 (仅当存在用户控制的角色时显示) */}
                  {userCharacters.length > 0 && (
                      <div className="grid gap-2">
                          {userCharacters.map(char => (

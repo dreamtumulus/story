@@ -51,6 +51,7 @@ export interface GlobalCharacter {
   id: string;
   ownerId: string;
   name: string;
+  role?: string; // 角色身份/职业
   gender: string;
   age: string;
   personality: string;

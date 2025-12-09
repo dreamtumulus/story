@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, FunctionDeclaration, Tool } from "@google/genai";
 import { Script, Character, Message, Language, AppSettings, GlobalCharacter, ChatMessage, NovelStyle } from "../types";
 
@@ -313,11 +314,11 @@ export const generateNextPlotSegment = async (script: Script, settings?: AppSett
 
 export const completeCharacterProfile = async (partialChar: Partial<GlobalCharacter>, settings?: AppSettings): Promise<Partial<GlobalCharacter>> => {
     return withRetry(async () => {
-        const prompt = `User Input Name: "${partialChar.name}". Analyze name. Is it famous? Match persona. Focus on Personality/Speaking Style. Visual brief. Simplified Chinese. JSON: {name, gender, age, personality, speakingStyle, visualDescription}.`;
+        const prompt = `User Input Name: "${partialChar.name}". Analyze name. Is it famous? Match persona. Focus on Personality/Speaking Style. Visual brief. Role/Occupation. Simplified Chinese. JSON: {name, gender, age, personality, speakingStyle, visualDescription, role}.`;
         const ai = getClient(settings);
         const response = await ai.models.generateContent({
             model: TEXT_MODEL, contents: prompt,
-            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, gender: { type: Type.STRING }, age: { type: Type.STRING }, personality: { type: Type.STRING }, speakingStyle: { type: Type.STRING }, visualDescription: { type: Type.STRING } } } }
+            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, gender: { type: Type.STRING }, age: { type: Type.STRING }, personality: { type: Type.STRING }, speakingStyle: { type: Type.STRING }, visualDescription: { type: Type.STRING }, role: { type: Type.STRING } } } }
         });
         const data = safeJsonParse<any>(response.text || "{}", {});
         return { ...partialChar, ...data };

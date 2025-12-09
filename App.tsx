@@ -54,9 +54,9 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
       return (
         <div className="h-screen w-full bg-zinc-950 flex flex-col items-center justify-center text-center p-8">
            <AlertCircle size={64} className="text-red-500 mb-6" />
-           <h1 className="text-3xl font-bold text-white mb-2">Something went wrong</h1>
-           <p className="text-zinc-500 mb-8 max-w-md">An unexpected error occurred. Please reload.</p>
-           <button onClick={() => window.location.reload()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-bold">Reload Application</button>
+           <h1 className="text-3xl font-bold text-white mb-2">出错了 (Something went wrong)</h1>
+           <p className="text-zinc-500 mb-8 max-w-md">界面渲染时发生意外错误。请尝试刷新页面。</p>
+           <button onClick={() => window.location.reload()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-bold">刷新页面</button>
         </div>
       );
     }
@@ -78,7 +78,7 @@ const Logo = ({ className = "" }: { className?: string }) => (
             <Cloud className="text-white w-8 h-8 drop-shadow-[0_0_10px_rgba(165,180,252,0.5)]" fill="currentColor" fillOpacity={0.2} strokeWidth={2.5} />
             <Play size={10} className="absolute text-indigo-600 fill-indigo-600 ml-0.5" />
         </div>
-        <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 to-white tracking-tight">Daydreaming</span>
+        <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 to-white tracking-tight">Daydreaming (梦幻微剧场)</span>
     </div>
 );
 
@@ -118,7 +118,7 @@ const SmartTextarea = ({ value, onChange, onAIRequest, label, rows = 3, placehol
       <div className="flex justify-between items-center mb-1">
         <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{label}</label>
         <button onClick={handleAI} disabled={loading} className="text-xs flex items-center gap-1 text-indigo-400 hover:text-indigo-300 disabled:opacity-50 transition-colors bg-indigo-500/10 px-2 py-0.5 rounded hover:bg-indigo-500/20">
-          {loading ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />} AI
+          {loading ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />} AI优化
         </button>
       </div>
       <textarea className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-200 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm group-hover:border-zinc-700" rows={rows} value={value} onChange={onChange} placeholder={placeholder}/>
@@ -233,7 +233,7 @@ function MainApp() {
                 setIsReconstructing(true);
                 const newPlot = await regenerateFuturePlot(currentScript, forcedCommand, appSettings);
                 updateScriptState({ ...currentScript, plotPoints: newPlot });
-                handleUpdateScriptHistory({ id: generateId(), characterId: 'narrator', content: `[SYSTEM]: ${forcedCommand}`, type: 'narration', timestamp: Date.now() });
+                handleUpdateScriptHistory({ id: generateId(), characterId: 'narrator', content: `[系统]: ${forcedCommand}`, type: 'narration', timestamp: Date.now() });
                 setIsReconstructing(false);
                 setIsPlaying(true);
                 setTurnProcessing(false);
@@ -297,7 +297,7 @@ function MainApp() {
 
   const handleInitPlotBuilder = async () => {
       if (!currentUser || selectedCastIds.length === 0) {
-          showNotification("Hint", "Select at least one character", 'error');
+          showNotification("提示", "请至少选择一位角色", 'error');
           return;
       }
       setIsGenerating(true);
@@ -339,7 +339,7 @@ function MainApp() {
           setCurrentScript(newScript);
           setView('PLOT_BUILDER');
       } catch (e) {
-          showNotification("Error", "Failed to init script", 'error');
+          showNotification("错误", "初始化剧本失败", 'error');
       } finally {
           setIsGenerating(false);
       }
@@ -353,7 +353,7 @@ function MainApp() {
           const nextPoint = await generateNextPlotSegment(currentScript, appSettings);
           updateScriptState({ ...currentScript, plotPoints: [...currentScript.plotPoints, nextPoint] });
       } catch (e) {
-          showNotification("Error", "Failed to generate scene", 'error');
+          showNotification("错误", "生成剧情失败", 'error');
       } finally {
           setIsAddingPlot(false);
       }
@@ -361,7 +361,7 @@ function MainApp() {
 
   const handleStartShow = () => {
       if (!currentScript || currentScript.plotPoints.length === 0) {
-          showNotification("Wait", "Create at least one plot point first!", 'error');
+          showNotification("请等待", "请至少创建一个剧情节点！", 'error');
           return;
       }
       // Add initial narration if empty
@@ -381,10 +381,11 @@ function MainApp() {
      if (!editingChar?.name || !currentUser) return;
      const newChar: GlobalCharacter = {
           id: editingChar.id || generateId(), ownerId: currentUser.id, name: editingChar.name,
-          gender: editingChar.gender || "Unknown", age: editingChar.age || "Unknown",
-          personality: editingChar.personality || "Neutral", speakingStyle: editingChar.speakingStyle || "Normal",
-          visualDescription: editingChar.visualDescription || "A person", avatarUrl: editingChar.avatarUrl,
-          createdAt: Date.now(), memories: editingChar.memories || []
+          gender: editingChar.gender || "未知", age: editingChar.age || "未知",
+          personality: editingChar.personality || "普通", speakingStyle: editingChar.speakingStyle || "正常",
+          visualDescription: editingChar.visualDescription || "普通人", avatarUrl: editingChar.avatarUrl,
+          createdAt: Date.now(), memories: editingChar.memories || [],
+          role: editingChar.role
      };
      setGlobalCharacters(prev => {
          const exists = prev.find(c => c.id === newChar.id);
@@ -404,11 +405,11 @@ function MainApp() {
          <div className="z-10 bg-zinc-900 p-8 rounded-2xl border border-zinc-800 w-full max-w-sm">
              <Logo className="mb-6 justify-center scale-125"/>
              <div className="flex bg-zinc-800 p-1 rounded-lg mb-4">
-                 <button className={`flex-1 py-1 text-sm ${authMode==='LOGIN'?'bg-zinc-700 text-white':'text-zinc-500'}`} onClick={()=>setAuthMode('LOGIN')}>Login</button>
-                 <button className={`flex-1 py-1 text-sm ${authMode==='REGISTER'?'bg-zinc-700 text-white':'text-zinc-500'}`} onClick={()=>setAuthMode('REGISTER')}>Register</button>
+                 <button className={`flex-1 py-1 text-sm ${authMode==='LOGIN'?'bg-zinc-700 text-white':'text-zinc-500'}`} onClick={()=>setAuthMode('LOGIN')}>登录</button>
+                 <button className={`flex-1 py-1 text-sm ${authMode==='REGISTER'?'bg-zinc-700 text-white':'text-zinc-500'}`} onClick={()=>setAuthMode('REGISTER')}>注册</button>
              </div>
-             <input className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-white mb-4" value={authInput} onChange={e=>setAuthInput(e.target.value)} placeholder="Username" />
-             <Button onClick={handleLogin} className="w-full">{authMode}</Button>
+             <input className="w-full bg-zinc-950 border border-zinc-700 rounded-lg p-2 text-white mb-4" value={authInput} onChange={e=>setAuthInput(e.target.value)} placeholder="用户名" />
+             <Button onClick={handleLogin} className="w-full">{authMode === 'LOGIN' ? '进入剧场' : '创建账户'}</Button>
          </div>
       </div>
     );
@@ -428,17 +429,17 @@ function MainApp() {
                    {/* Main Action Area */}
                    <div className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 border border-zinc-800 rounded-3xl p-8 mb-12 flex flex-col md:flex-row items-center justify-between gap-8">
                        <div>
-                           <h1 className="text-4xl font-bold text-white mb-4">Create Your Story</h1>
-                           <p className="text-zinc-400 max-w-lg">Select characters, build a plot step-by-step, and watch them perform in real-time.</p>
+                           <h1 className="text-4xl font-bold text-white mb-4">开启你的故事</h1>
+                           <p className="text-zinc-400 max-w-lg">选择角色，逐步构建剧情，实时演绎属于你的梦幻微剧。</p>
                        </div>
-                       <Button size="lg" icon={Sparkles} onClick={handleStartCreation} className="shadow-xl scale-110">Start New Story</Button>
+                       <Button size="lg" icon={Sparkles} onClick={handleStartCreation} className="shadow-xl scale-110">开始新故事</Button>
                    </div>
 
                    {/* Tabs */}
                    <div className="flex gap-4 mb-6 overflow-x-auto pb-2">
                        {['CHARACTERS', 'SCRIPTS'].map(t => (
                            <button key={t} onClick={() => setDashboardTab(t as any)} className={`px-4 py-2 rounded-full font-bold text-sm ${dashboardTab === t ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>
-                               {t}
+                               {t === 'CHARACTERS' ? '角色库' : '剧本列表'}
                            </button>
                        ))}
                    </div>
@@ -447,7 +448,7 @@ function MainApp() {
                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                            <div onClick={() => { setEditingChar({}); setShowCharModal(true); }} className="cursor-pointer bg-zinc-900 border border-dashed border-zinc-700 hover:border-indigo-500 rounded-xl flex flex-col items-center justify-center p-6 transition-all">
                                <Plus className="text-zinc-500 mb-2"/>
-                               <span className="text-sm font-bold text-zinc-400">New Character</span>
+                               <span className="text-sm font-bold text-zinc-400">新建角色</span>
                            </div>
                            {globalCharacters.map(c => (
                                <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-zinc-700 transition-all">
@@ -485,9 +486,9 @@ function MainApp() {
   const renderCharacterSelector = () => (
       <div className="h-screen bg-zinc-950 flex flex-col">
           <header className="p-6 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center">
-              <Button variant="ghost" onClick={() => setView('DASHBOARD')} icon={ChevronLeft}>Cancel</Button>
-              <h2 className="text-xl font-bold text-white">Step 1: Select Cast</h2>
-              <Button disabled={selectedCastIds.length === 0} onClick={() => setView('PLOT_BUILDER')} icon={ArrowRight}>Next</Button>
+              <Button variant="ghost" onClick={() => setView('DASHBOARD')} icon={ChevronLeft}>取消</Button>
+              <h2 className="text-xl font-bold text-white">第一步：选择演员</h2>
+              <Button disabled={selectedCastIds.length === 0} onClick={() => setView('PLOT_BUILDER')} icon={ArrowRight}>下一步</Button>
           </header>
           <div className="flex-1 overflow-y-auto p-8">
               <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
@@ -503,7 +504,7 @@ function MainApp() {
                           </div>
                       </div>
                   ))}
-                  {globalCharacters.length === 0 && <div className="col-span-full text-center text-zinc-500 py-10">No characters found. Create some in the Dashboard first.</div>}
+                  {globalCharacters.length === 0 && <div className="col-span-full text-center text-zinc-500 py-10">没有角色。请先在首页创建角色。</div>}
               </div>
           </div>
       </div>
@@ -513,10 +514,10 @@ function MainApp() {
       <div className="h-screen bg-zinc-950 flex flex-col">
           <header className="p-6 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center">
                <div className="flex items-center gap-4">
-                   <Button variant="ghost" onClick={() => setView('CHAR_SELECT')} icon={ChevronLeft}>Back</Button>
-                   <h2 className="text-xl font-bold text-white">Step 2: Build Plot</h2>
+                   <Button variant="ghost" onClick={() => setView('CHAR_SELECT')} icon={ChevronLeft}>上一步</Button>
+                   <h2 className="text-xl font-bold text-white">第二步：构建剧情</h2>
                </div>
-               <Button onClick={handleStartShow} disabled={!currentScript || currentScript.plotPoints.length === 0} icon={Play} variant="success">Start Show</Button>
+               <Button onClick={handleStartShow} disabled={!currentScript || currentScript.plotPoints.length === 0} icon={Play} variant="success">开始演绎</Button>
           </header>
           
           <div className="flex-1 overflow-y-auto p-8">
@@ -524,16 +525,16 @@ function MainApp() {
                   {/* Initial Prompt Section */}
                   {!currentScript && (
                       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center space-y-6">
-                          <h3 className="text-2xl font-bold text-white">What is this story about?</h3>
+                          <h3 className="text-2xl font-bold text-white">这个故事关于什么？</h3>
                           <textarea 
                              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-white text-lg focus:border-indigo-500 outline-none" 
                              rows={4}
-                             placeholder="e.g., A detective interrogates a suspect who claims to be from the future..."
+                             placeholder="例如：一位侦探审问一名声称来自未来的嫌疑人..."
                              value={creationPrompt}
                              onChange={e => setCreationPrompt(e.target.value)}
                           />
                           <Button onClick={handleInitPlotBuilder} disabled={isGenerating || !creationPrompt.trim()} size="lg" icon={isGenerating ? Loader2 : Sparkles}>
-                              {isGenerating ? "Initializing World..." : "Initialize Story"}
+                              {isGenerating ? "初始化世界观..." : "初始化故事"}
                           </Button>
                       </div>
                   )}
@@ -543,17 +544,17 @@ function MainApp() {
                       <div className="space-y-6 animate-fade-in">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
-                                  <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Title</label>
+                                  <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">标题</label>
                                   <input className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white font-bold" value={currentScript.title} onChange={e => updateScriptState({...currentScript, title: e.target.value})} />
                               </div>
                               <div>
-                                  <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Setting</label>
+                                  <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">背景设定</label>
                                   <input className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-white" value={currentScript.setting} onChange={e => updateScriptState({...currentScript, setting: e.target.value})} />
                               </div>
                           </div>
                           
                           <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
-                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Film size={18}/> Plot Outline</h3>
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Film size={18}/> 剧情大纲</h3>
                               <div className="space-y-4 mb-6">
                                   {currentScript.plotPoints.map((p, i) => (
                                       <div key={i} className="flex gap-4 items-start group">
@@ -576,15 +577,15 @@ function MainApp() {
                                           }} className="text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={16}/></button>
                                       </div>
                                   ))}
-                                  {currentScript.plotPoints.length === 0 && <div className="text-center text-zinc-600 py-4 italic">No plot points yet. Add one below.</div>}
+                                  {currentScript.plotPoints.length === 0 && <div className="text-center text-zinc-600 py-4 italic">暂无剧情点。请在下方添加。</div>}
                               </div>
                               
                               <div className="flex gap-4">
                                   <Button onClick={handleAddNextScene} disabled={isAddingPlot} variant="secondary" className="flex-1" icon={isAddingPlot ? Loader2 : Sparkles}>
-                                      {isAddingPlot ? "Dreaming..." : "AI Generate Next Scene"}
+                                      {isAddingPlot ? "构思中..." : "AI 生成下一幕"}
                                   </Button>
-                                  <Button onClick={() => updateScriptState({...currentScript, plotPoints: [...currentScript.plotPoints, "New Scene"]})} variant="ghost" className="flex-1" icon={Plus}>
-                                      Add Manually
+                                  <Button onClick={() => updateScriptState({...currentScript, plotPoints: [...currentScript.plotPoints, "新场景"]})} variant="ghost" className="flex-1" icon={Plus}>
+                                      手动添加
                                   </Button>
                               </div>
                           </div>
@@ -604,22 +605,22 @@ function MainApp() {
             {/* Header */}
             <div className="p-4 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center z-10 shadow-lg">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" icon={ChevronLeft} onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }}>Exit</Button>
+                    <Button variant="ghost" icon={ChevronLeft} onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }}>退出</Button>
                     <div>
                         <h2 className="text-white font-bold">{currentScript.title}</h2>
                         <div className="flex items-center gap-2 text-xs text-zinc-500">
                              <span className={`flex items-center gap-1 ${isPlaying ? 'text-green-500' : 'text-red-500'}`}>
                                  <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                                 {isPlaying ? 'LIVE' : 'PAUSED'}
+                                 {isPlaying ? '直播中' : '已暂停'}
                              </span>
                              <span>|</span>
-                             <span>{currentScript.currentPlotIndex + 1} / {currentScript.plotPoints.length} Scenes</span>
+                             <span>{currentScript.currentPlotIndex + 1} / {currentScript.plotPoints.length} 幕</span>
                         </div>
                     </div>
                 </div>
                 <div className="flex gap-2">
                     <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={isPlaying ? Pause : Play} onClick={() => setIsPlaying(!isPlaying)}>
-                        {isPlaying ? 'Pause' : 'Resume'}
+                        {isPlaying ? '暂停' : '继续'}
                     </Button>
                 </div>
             </div>
@@ -659,7 +660,7 @@ function MainApp() {
                                      : 'bg-zinc-800 text-zinc-200 rounded-tl-none'
                                  }`}>
                                      {msg.content}
-                                     {msg.type === 'action' && <span className="block mt-2 text-xs opacity-70 italic">*Action*</span>}
+                                     {msg.type === 'action' && <span className="block mt-2 text-xs opacity-70 italic">*动作*</span>}
                                  </div>
                              </div>
                          </div>
@@ -683,12 +684,12 @@ function MainApp() {
                         <Crown size={18} className="text-amber-500 mr-3" />
                         <input 
                             className="flex-1 bg-transparent border-none text-white focus:outline-none text-sm"
-                            placeholder="Director's Instruction (God Mode)..."
+                            placeholder="导演指令 (上帝模式)..."
                             value={directorInput}
                             onChange={e => setDirectorInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && (directorQueueRef.current.push(directorInput), setDirectorInput(''), setIsPlaying(true))}
                         />
-                        <button onClick={() => { directorQueueRef.current.push(directorInput); setDirectorInput(''); setIsPlaying(true); }} disabled={!directorInput} className="text-xs font-bold text-amber-500 hover:text-amber-400 uppercase">Inject</button>
+                        <button onClick={() => { directorQueueRef.current.push(directorInput); setDirectorInput(''); setIsPlaying(true); }} disabled={!directorInput} className="text-xs font-bold text-amber-500 hover:text-amber-400 uppercase">插入指令</button>
                     </div>
 
                     {/* Character Inputs (if any user controlled chars) */}
@@ -699,11 +700,11 @@ function MainApp() {
                              </div>
                              {/* Pop-up Input Box for this character */}
                              <div className="absolute bottom-full right-0 mb-3 w-72 bg-zinc-800 border border-zinc-700 rounded-xl p-3 shadow-2xl invisible group-hover:visible focus-within:visible transition-all opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                 <div className="text-xs font-bold text-zinc-400 mb-2">Speaking as {char.name}</div>
+                                 <div className="text-xs font-bold text-zinc-400 mb-2">当前扮演: {char.name}</div>
                                  <textarea 
                                      className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-white text-sm outline-none resize-none"
                                      rows={2}
-                                     placeholder="Enter dialogue..."
+                                     placeholder="输入对白..."
                                      value={userInputs[char.id] || ''}
                                      onChange={e => setUserInputs({...userInputs, [char.id]: e.target.value})}
                                      onKeyDown={e => {
@@ -722,7 +723,7 @@ function MainApp() {
                                               handleUpdateScriptHistory({id: generateId(), characterId: char.id, content: userInputs[char.id], type: 'dialogue', timestamp: Date.now()});
                                               setUserInputs({...userInputs, [char.id]: ''});
                                           }
-                                     }} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded hover:bg-indigo-500">Send</button>
+                                     }} className="bg-indigo-600 text-white text-xs px-3 py-1 rounded hover:bg-indigo-500">发送</button>
                                  </div>
                              </div>
                          </div>
@@ -739,7 +740,7 @@ function MainApp() {
               <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-800/50">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2">
                       <Sparkles size={20} className="text-indigo-400"/> 
-                      {editingChar?.id && globalCharacters.find(c => c.id === editingChar.id) ? "Edit Character" : "Create Character"}
+                      {editingChar?.id && globalCharacters.find(c => c.id === editingChar.id) ? "编辑角色" : "创建角色"}
                   </h2>
                   <button onClick={() => setShowCharModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
               </div>
@@ -749,7 +750,7 @@ function MainApp() {
                           <Avatar name={editingChar?.name || "?"} url={editingChar?.avatarUrl} size="2xl" />
                           <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
                               <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full text-xs font-bold backdrop-blur flex items-center gap-2">
-                                  <Upload size={14}/> Upload
+                                  <Upload size={14}/> 上传头像
                                   <input type="file" className="hidden" accept="image/*" onChange={e => {
                                       const file = e.target.files?.[0];
                                       if (file && editingChar) {
@@ -767,16 +768,16 @@ function MainApp() {
                                       setEditingChar(p => ({...p!, avatarUrl: url}));
                                   } catch (e) {} finally { setIsAvatarGenerating(false); }
                               }} disabled={isAvatarGenerating || !editingChar?.visualDescription} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-2 disabled:opacity-50">
-                                  {isAvatarGenerating ? <RefreshCw size={14} className="animate-spin"/> : <Wand2 size={14}/>} AI Gen
+                                  {isAvatarGenerating ? <RefreshCw size={14} className="animate-spin"/> : <Wand2 size={14}/>} AI生成
                               </button>
                           </div>
                       </div>
                   </div>
                   <div className="w-full md:w-2/3 p-8 overflow-y-auto space-y-6 bg-zinc-900/50">
                       <div>
-                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Name</label>
+                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">姓名</label>
                           <div className="flex gap-2">
-                              <input className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-lg text-white" value={editingChar?.name || ''} onChange={e => setEditingChar(p => ({...p!, name: e.target.value}))} placeholder="Name (e.g. Sherlock)" />
+                              <input className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-lg text-white" value={editingChar?.name || ''} onChange={e => setEditingChar(p => ({...p!, name: e.target.value}))} placeholder="输入名字 (例如: 林黛玉)" />
                               <Button onClick={async () => {
                                   if (!editingChar?.name) return;
                                   setIsCharAutoFilling(true);
@@ -784,26 +785,27 @@ function MainApp() {
                                       const filled = await completeCharacterProfile(editingChar, appSettings);
                                       setEditingChar(p => ({...p, ...filled}));
                                   } catch(e){} finally { setIsCharAutoFilling(false); }
-                              }} disabled={!editingChar?.name || isCharAutoFilling} variant="primary" icon={isCharAutoFilling ? RefreshCw : Sparkles}>{isCharAutoFilling ? "Filling..." : "Magic Fill"}</Button>
+                              }} disabled={!editingChar?.name || isCharAutoFilling} variant="primary" icon={isCharAutoFilling ? RefreshCw : Sparkles}>{isCharAutoFilling ? "生成中..." : "✨ 一键生成"}</Button>
                           </div>
                       </div>
                       <div className="grid grid-cols-2 gap-6">
-                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Gender</label><input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.gender || ''} onChange={e => setEditingChar(p => ({...p!, gender: e.target.value}))} /></div>
-                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Age</label><input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.age || ''} onChange={e => setEditingChar(p => ({...p!, age: e.target.value}))} /></div>
+                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">角色身份 (职业/定位)</label><input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.role || ''} onChange={e => setEditingChar(p => ({...p!, role: e.target.value}))} /></div>
+                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">性别</label><input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.gender || ''} onChange={e => setEditingChar(p => ({...p!, gender: e.target.value}))} /></div>
+                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">年龄</label><input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.age || ''} onChange={e => setEditingChar(p => ({...p!, age: e.target.value}))} /></div>
                       </div>
-                      <SmartTextarea label="Personality" value={editingChar?.personality || ''} onChange={e => setEditingChar(p => ({...p!, personality: e.target.value}))} onAIRequest={async () => {
+                      <SmartTextarea label="性格特征" value={editingChar?.personality || ''} onChange={e => setEditingChar(p => ({...p!, personality: e.target.value}))} onAIRequest={async () => {
                           const refined = await refineCharacterTrait(editingChar?.personality||'', editingChar?.name||'','Personality',lang,appSettings);
                           setEditingChar(p=>({...p!, personality: refined}));
                       }} />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Speaking Style</label><textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.speakingStyle || ''} onChange={e => setEditingChar(p => ({...p!, speakingStyle: e.target.value}))} /></div>
-                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Visual Description</label><textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.visualDescription || ''} onChange={e => setEditingChar(p => ({...p!, visualDescription: e.target.value}))} /></div>
+                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">语言风格</label><textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.speakingStyle || ''} onChange={e => setEditingChar(p => ({...p!, speakingStyle: e.target.value}))} /></div>
+                          <div><label className="text-xs font-bold text-zinc-500 uppercase block mb-2">外貌描述</label><textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.visualDescription || ''} onChange={e => setEditingChar(p => ({...p!, visualDescription: e.target.value}))} /></div>
                       </div>
                   </div>
               </div>
               <div className="p-6 border-t border-zinc-800 bg-zinc-900 flex justify-end gap-4">
-                  <Button variant="secondary" onClick={() => setShowCharModal(false)}>Close</Button>
-                  <Button variant="primary" onClick={handleSaveGlobalCharacter} icon={Save} className="px-8">Save</Button>
+                  <Button variant="secondary" onClick={() => setShowCharModal(false)}>关闭</Button>
+                  <Button variant="primary" onClick={handleSaveGlobalCharacter} icon={Save} className="px-8">保存</Button>
               </div>
           </div>
       </div>

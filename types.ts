@@ -53,7 +53,6 @@ export interface GlobalCharacter {
   name: string;
   gender: string;
   age: string;
-  role?: string; // Added role field
   personality: string;
   speakingStyle: string;
   visualDescription: string;

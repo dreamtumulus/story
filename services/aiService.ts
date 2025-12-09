@@ -838,7 +838,9 @@ export const autoCompleteStory = async (
             data = safeJsonParse(response.text || "{}", {});
         }
 
-        const narrations = Array.isArray(data.narrations) ? data.narrations : [];
+        // 安全检查：确保是数组，防止UI崩溃
+        const narrations = (data && Array.isArray(data.narrations)) ? data.narrations : [];
+        
         return narrations.map((content: string) => ({
             id: generateId(),
             characterId: 'narrator',

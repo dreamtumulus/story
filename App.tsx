@@ -29,6 +29,53 @@ const generateId = (): string => {
   });
 };
 
+// --- 小说风格映射 (中文) ---
+const NOVEL_STYLES_MAP: Record<NovelStyle, string> = {
+    'STANDARD': '标准小说风格',
+    'JIN_YONG': '金庸 (武侠风格)',
+    'CIXIN_LIU': '刘慈欣 (科幻风格)',
+    'HEMINGWAY': '海明威 (简洁有力)',
+    'AUSTEN': '简·奥斯汀 (细腻情感)',
+    'LU_XUN': '鲁迅 (犀利讽刺)'
+};
+
+// --- Error Boundary (防止白屏/黑屏) ---
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, errorMsg: string}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, errorMsg: error?.message || 'Unknown Error' };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Uncaught Error in Component:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen w-full bg-zinc-950 flex flex-col items-center justify-center text-center p-8">
+           <AlertCircle size={64} className="text-red-500 mb-6" />
+           <h1 className="text-3xl font-bold text-white mb-2">Something went wrong</h1>
+           <p className="text-zinc-500 mb-8 max-w-md">
+             An unexpected error occurred while rendering the interface. This might be due to a temporary glitch or data issue.
+           </p>
+           <div className="bg-zinc-900 p-4 rounded-lg border border-red-500/20 text-red-400 font-mono text-sm mb-8 max-w-lg overflow-auto">
+             Error: {this.state.errorMsg}
+           </div>
+           <button onClick={() => window.location.reload()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-xl font-bold transition-all">
+             Reload Application
+           </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // --- 角色气泡颜色映射 ---
 const CHAR_COLORS = [
     '#fca5a5', // red-300
@@ -368,6 +415,14 @@ const SmartTextarea = ({
 // --- 主程序入口 ---
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+       <MainApp />
+    </ErrorBoundary>
+  );
+}
+
+function MainApp() {
   // --- 认证状态 ---
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
@@ -1632,7 +1687,9 @@ export default function App() {
                                       onClick={() => setNovelStyle(s as NovelStyle)}
                                       className={`p-3 rounded-xl border cursor-pointer transition-all ${novelStyle === s ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700'}`}
                                    >
-                                       <div className="font-bold text-sm">{s.replace('_', ' ')}</div>
+                                       <div className="font-bold text-sm">
+                                           {NOVEL_STYLES_MAP[s as NovelStyle] || s}
+                                       </div>
                                    </div>
                                ))}
                            </div>

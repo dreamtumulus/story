@@ -427,6 +427,7 @@ function MainApp() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
   const [authInput, setAuthInput] = useState('');
+  const [isAppLoading, setIsAppLoading] = useState(true);
 
   // --- 配置状态 ---
   const [lang, setLang] = useState<Language>('zh-CN');
@@ -498,25 +499,40 @@ function MainApp() {
 
   const t = TRANSLATIONS[lang];
 
-  // --- 初始化与数据加载 Effect ---
+  // --- 初始化与数据加载 Effect (Async for IndexedDB) ---
   useEffect(() => {
-    const user = authService.getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
-      setScripts(authService.getScripts(user.id));
-      setGlobalCharacters(authService.getGlobalCharacters(user.id));
-    }
+    const initAuth = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user) {
+          setCurrentUser(user);
+          const [userScripts, userChars] = await Promise.all([
+             authService.getScripts(user.id),
+             authService.getGlobalCharacters(user.id)
+          ]);
+          setScripts(userScripts);
+          setGlobalCharacters(userChars);
+        }
+      } catch (e) {
+        console.error("Initialization error", e);
+      } finally {
+        setIsAppLoading(false);
+      }
+    };
+    initAuth();
   }, []);
 
+  // --- 异步保存 Effect ---
+  // 使用 debounce 或者 fire-and-forget，这里简单起见使用 fire-and-forget
   useEffect(() => {
     if (currentUser) {
-      authService.saveScripts(currentUser.id, scripts);
+      authService.saveScripts(currentUser.id, scripts).catch(e => console.error("Failed to save scripts", e));
     }
   }, [scripts, currentUser]);
 
   useEffect(() => {
     if (currentUser) {
-      authService.saveGlobalCharacters(currentUser.id, globalCharacters);
+      authService.saveGlobalCharacters(currentUser.id, globalCharacters).catch(e => console.error("Failed to save chars", e));
     }
   }, [globalCharacters, currentUser]);
 
@@ -608,15 +624,18 @@ function MainApp() {
 
   // --- 事件处理函数 ---
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!authInput.trim()) return;
     try {
       let user;
-      if (authMode === 'LOGIN') user = authService.login(authInput);
-      else user = authService.register(authInput);
+      if (authMode === 'LOGIN') user = await authService.login(authInput);
+      else user = await authService.register(authInput);
+      
       setCurrentUser(user);
-      setScripts(authService.getScripts(user.id));
-      setGlobalCharacters(authService.getGlobalCharacters(user.id));
+      const userScripts = await authService.getScripts(user.id);
+      setScripts(userScripts);
+      const userChars = await authService.getGlobalCharacters(user.id);
+      setGlobalCharacters(userChars);
       setAuthInput('');
     } catch (e: any) {
       showNotification("Auth Error", e.message, 'error');
@@ -764,9 +783,9 @@ function MainApp() {
 
   // --- 陪伴聊天逻辑 ---
   
-  const handleOpenChat = (char: GlobalCharacter) => {
+  const handleOpenChat = async (char: GlobalCharacter) => {
       if (!currentUser) return;
-      let session = authService.getChatSession(currentUser.id, char.id);
+      let session = await authService.getChatSession(currentUser.id, char.id);
       if (!session) {
           session = {
               id: generateId(),
@@ -1122,6 +1141,14 @@ function MainApp() {
   };
 
   // --- 视图渲染 (Views) ---
+
+  if (isAppLoading) {
+      return (
+          <div className="h-screen w-full bg-zinc-950 flex items-center justify-center">
+              <Loader2 className="animate-spin text-indigo-500" size={48} />
+          </div>
+      );
+  }
 
   // 登录界面
   if (!currentUser) {

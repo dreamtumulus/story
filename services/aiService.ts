@@ -421,8 +421,10 @@ export const generateNextBeat = async (script: Script, forcedDirectorCommand: st
       return `${charName} [${m.type}]: ${m.content}`;
     }).join("\n");
 
+    // CRITICAL FIX: Safe access to character properties using optional chaining and default empty strings
+    // This prevents crashes if incomplete character data is passed
     const characterProfiles = script.characters.map(c => 
-      `${c.name}: ${c.personality.substring(0, 50)}... Style: ${c.speakingStyle.substring(0,50)}...`
+      `${c.name}: ${(c.personality || "").substring(0, 50)}... Style: ${(c.speakingStyle || "").substring(0,50)}...`
     ).join("\n");
 
     let promptContext = "";
@@ -461,12 +463,16 @@ export const generateNextBeat = async (script: Script, forcedDirectorCommand: st
     const finalData = { ...fallback, ...data };
 
     let charId = 'narrator';
-    if (finalData.characterName !== 'Narrator') {
-      const char = script.characters.find(c => c.name === finalData.characterName);
+    if (finalData.characterName && finalData.characterName !== 'Narrator') {
+      // Fuzzy match safe check
+      const char = script.characters.find(c => c.name.includes(finalData.characterName) || finalData.characterName.includes(c.name));
       if (char) charId = char.id;
     }
 
-    return { characterId: charId, content: finalData.content || "...", type: (finalData.type as any) || 'narration' };
+    // Safety fallback if content is empty
+    const content = finalData.content || "...";
+    
+    return { characterId: charId, content: content, type: (finalData.type as any) || 'narration' };
   });
 };
 

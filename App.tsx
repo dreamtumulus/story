@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Play, Pause, Save, Settings, 
@@ -229,13 +230,14 @@ function MainApp() {
         if (directorQueueRef.current.length > 0) {
             forcedCommand = directorQueueRef.current.shift() || null;
             if (forcedCommand) {
+                // Pause temporarily to handle reconstruction manually
                 setIsPlaying(false);
                 setIsReconstructing(true);
                 const newPlot = await regenerateFuturePlot(currentScript, forcedCommand, appSettings);
                 updateScriptState({ ...currentScript, plotPoints: newPlot });
                 handleUpdateScriptHistory({ id: generateId(), characterId: 'narrator', content: `[系统]: ${forcedCommand}`, type: 'narration', timestamp: Date.now() });
                 setIsReconstructing(false);
-                setIsPlaying(true);
+                setIsPlaying(true); // Resume
                 setTurnProcessing(false);
                 return;
             }
@@ -248,6 +250,7 @@ function MainApp() {
         handleUpdateScriptHistory({ id: generateId(), characterId: nextBeat.characterId, content: nextBeat.content, type: nextBeat.type, timestamp: Date.now() });
       } catch (e: any) {
         setIsPlaying(false);
+        showNotification("演绎暂停", `AI请求失败: ${e.message}`, 'error');
       } finally {
         setTurnProcessing(false);
       }
@@ -310,15 +313,15 @@ function MainApp() {
               id: generateId(),
               name: c.name,
               role: "Protagonist",
-              personality: c.personality,
-              speakingStyle: c.speakingStyle,
-              visualDescription: c.visualDescription,
+              personality: c.personality || "普通",
+              speakingStyle: c.speakingStyle || "正常",
+              visualDescription: c.visualDescription || "普通人",
               avatarUrl: c.avatarUrl,
               isUserControlled: false,
               isGlobal: true,
               globalId: c.id,
-              gender: c.gender,
-              age: c.age
+              gender: c.gender || "未知",
+              age: c.age || "未知"
           }));
 
           const newScript: Script = {
@@ -364,6 +367,11 @@ function MainApp() {
           showNotification("请等待", "请至少创建一个剧情节点！", 'error');
           return;
       }
+      
+      // Explicitly Reset flags
+      setTurnProcessing(false);
+      setIsPlaying(true); // Auto-play on enter
+
       // Add initial narration if empty
       if (currentScript.history.length === 0) {
           const intro: Message = {
@@ -619,8 +627,8 @@ function MainApp() {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={isPlaying ? Pause : Play} onClick={() => setIsPlaying(!isPlaying)}>
-                        {isPlaying ? '暂停' : '继续'}
+                    <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={turnProcessing ? Loader2 : (isPlaying ? Pause : Play)} onClick={() => setIsPlaying(!isPlaying)}>
+                        {turnProcessing ? '思考中...' : (isPlaying ? '暂停' : '继续')}
                     </Button>
                 </div>
             </div>

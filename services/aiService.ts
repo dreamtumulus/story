@@ -6,9 +6,41 @@ const IMAGE_MODEL = 'gemini-2.5-flash-image';
 const VIDEO_MODEL = 'veo-3.1-fast-generate-preview';
 const DEFAULT_GEMINI_KEY = 'AIzaSyC6zQSEAAdLRgOMR6_CwQ1sSNVur0_vpW0';
 
+// --- UUID Polyfill (Prevents crashes on non-secure contexts) ---
+export const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+// --- Safe Env Access (Prevents ReferenceError: process is not defined) ---
+const getEnvVar = (key: string): string | undefined => {
+    try {
+        // Check standard process.env (Node/Webpack)
+        if (typeof process !== 'undefined' && process.env) {
+            return process.env[key];
+        }
+    } catch (e) {}
+    
+    try {
+        // Check Vite import.meta.env
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            return import.meta.env[key];
+        }
+    } catch (e) {}
+    
+    return undefined;
+};
+
 // --- Helper to get Effective Gemini Key ---
 const getGeminiKey = (settings?: AppSettings) => {
-    return settings?.apiKey || process.env.API_KEY || DEFAULT_GEMINI_KEY;
+    return settings?.apiKey || getEnvVar('API_KEY') || DEFAULT_GEMINI_KEY;
 };
 
 // --- Helper to get Client (Gemini) ---
@@ -150,12 +182,6 @@ const generateVideoTool = async (prompt: string, settings?: AppSettings) => {
     // Check key for Veo
     await ensureVeoKey();
     
-    // We MUST create a new client instance after key selection potentially happened
-    // However, the key is injected into process.env.API_KEY by the window.aistudio mechanism if selected
-    // But getClient uses settings.apiKey or process.env.API_KEY.
-    // If user selects a key via aistudio, it usually overrides the environment or we need to rely on it.
-    // For simplicity, we trust getClient will pick up the right key if we pass settings,
-    // OR if the user used the UI selector, process.env.API_KEY is populated.
     const ai = getClient(settings);
 
     let operation = await ai.models.generateVideos({
@@ -486,16 +512,19 @@ export const generateScriptBlueprint = async (
 
 // Helper to normalize script data from any provider
 const processScriptData = (data: any, originalPrompt: string, preDefinedChars: GlobalCharacter[]) => {
+    // Robust check for characters array
+    const rawChars = Array.isArray(data.characters) ? data.characters : [];
+    
     // Map generated characters to existing globals if names match (fuzzy match)
-    const characters = (data.characters || []).map((c: any) => {
+    const characters = rawChars.map((c: any) => {
         // Check if this generated char matches a predefined global char
         const match = preDefinedChars.find(pc => pc.name.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(pc.name.toLowerCase()));
         
         if (match) {
             return {
-                id: crypto.randomUUID(),
+                id: generateId(), // Safe UUID
                 name: match.name, // Enforce global name
-                role: c.role,
+                role: c.role || "Role",
                 personality: match.personality, // Enforce global personality
                 speakingStyle: match.speakingStyle,
                 visualDescription: match.visualDescription,
@@ -509,7 +538,7 @@ const processScriptData = (data: any, originalPrompt: string, preDefinedChars: G
         }
 
         return {
-            id: crypto.randomUUID(),
+            id: generateId(), // Safe UUID
             name: c.name || "Unknown",
             role: c.role || "Extra",
             personality: c.personality || "Neutral",
@@ -642,7 +671,7 @@ export const generateSingleCharacter = async (script: Script, settings?: AppSett
         const finalData = { ...fallback, ...data };
 
         return {
-            id: crypto.randomUUID(),
+            id: generateId(),
             name: finalData.name,
             role: finalData.role,
             personality: finalData.personality,
@@ -695,7 +724,7 @@ export const regenerateFuturePlot = async (
             data = safeJsonParse(response.text || "{}", {});
         }
 
-        return data.newPlotPoints || script.plotPoints;
+        return Array.isArray(data.newPlotPoints) ? data.newPlotPoints : script.plotPoints;
     });
 };
 
@@ -784,9 +813,9 @@ export const autoCompleteStory = async (
             data = safeJsonParse(response.text || "{}", {});
         }
 
-        const narrations = data.narrations || [];
+        const narrations = Array.isArray(data.narrations) ? data.narrations : [];
         return narrations.map((content: string) => ({
-            id: crypto.randomUUID(),
+            id: generateId(),
             characterId: 'narrator',
             type: 'narration',
             content: content,

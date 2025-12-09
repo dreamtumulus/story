@@ -1,5 +1,3 @@
-
-
 import { User, Script, GlobalCharacter, ChatSession } from "../types";
 
 // Keys for local storage
@@ -8,6 +6,17 @@ const CURRENT_USER_KEY = 'skena_current_user';
 const SCRIPTS_KEY = 'skena_all_scripts';
 const CHARACTERS_KEY = 'skena_global_characters';
 const CHATS_KEY = 'skena_chat_sessions';
+
+// Simple UUID polyfill to avoid importing from aiService and causing cycles or load issues
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 export const authService = {
   // Register a new user
@@ -20,7 +29,7 @@ export const authService = {
     }
 
     const newUser: User = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       username,
       createdAt: Date.now()
     };

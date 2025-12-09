@@ -18,6 +18,17 @@ import {
 } from './services/aiService';
 import { authService } from './services/authService';
 
+// --- Safe UUID Polyfill (Inline to avoid import issues on crash) ---
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 // --- Character Text Colors (Pastel Palette) ---
 const CHAR_COLORS = [
     '#fca5a5', // red-300
@@ -479,7 +490,7 @@ export default function App() {
                 const newPlot = await regenerateFuturePlot(currentScript, forcedCommand, appSettings);
                 updateScriptState({ ...currentScript, plotPoints: newPlot });
                 const dirMsg: Message = {
-                    id: crypto.randomUUID(), characterId: 'narrator', content: `[SYSTEM OVERRIDE]: ${forcedCommand}`, type: 'narration', timestamp: Date.now()
+                    id: generateId(), characterId: 'narrator', content: `[SYSTEM OVERRIDE]: ${forcedCommand}`, type: 'narration', timestamp: Date.now()
                 };
                 handleUpdateScriptHistory(dirMsg);
                 setIsReconstructing(false);
@@ -497,7 +508,7 @@ export default function App() {
         
         // 2. Add Message Immediately
         const newMessage: Message = {
-          id: crypto.randomUUID(), characterId: nextBeat.characterId,
+          id: generateId(), characterId: nextBeat.characterId,
           content: nextBeat.content, type: nextBeat.type, timestamp: Date.now()
         };
         handleUpdateScriptHistory(newMessage);
@@ -591,7 +602,7 @@ export default function App() {
 
   const openNewCharacterModal = () => {
       setEditingChar({
-          id: crypto.randomUUID(),
+          id: generateId(),
           name: '', gender: '', age: '', personality: '', speakingStyle: '', visualDescription: '',
           avatarUrl: '', memories: []
       });
@@ -607,7 +618,7 @@ export default function App() {
       if (!editingChar || !editingChar.name || !currentUser) return;
       
       const newChar: GlobalCharacter = {
-          id: editingChar.id || crypto.randomUUID(),
+          id: editingChar.id || generateId(),
           ownerId: currentUser.id,
           name: editingChar.name,
           gender: editingChar.gender || "Unknown",
@@ -694,7 +705,7 @@ export default function App() {
       let session = authService.getChatSession(currentUser.id, char.id);
       if (!session) {
           session = {
-              id: crypto.randomUUID(),
+              id: generateId(),
               userId: currentUser.id,
               characterId: char.id,
               messages: [],
@@ -746,7 +757,7 @@ export default function App() {
       if (!char) return;
 
       const userMsg: ChatMessage = {
-          id: crypto.randomUUID(),
+          id: generateId(),
           role: 'user',
           content: chatInput,
           timestamp: Date.now()
@@ -765,7 +776,7 @@ export default function App() {
       try {
           const result = await chatWithCharacter(char, updatedSession.messages, userMsg.content, appSettings);
           const aiMsg: ChatMessage = {
-              id: crypto.randomUUID(),
+              id: generateId(),
               role: 'model',
               content: result.text,
               timestamp: Date.now(),
@@ -802,7 +813,7 @@ export default function App() {
       const blueprint = await generateScriptBlueprint(promptInput, cast, lang, appSettings);
       
       const newScript: Script = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         ownerId: currentUser.id,
         title: blueprint.title || "Untitled",
         premise: blueprint.premise || "",
@@ -811,7 +822,7 @@ export default function App() {
         possibleEndings: blueprint.possibleEndings || [],
         characters: blueprint.characters || [],
         history: [{
-          id: crypto.randomUUID(), characterId: 'narrator', type: 'narration',
+          id: generateId(), characterId: 'narrator', type: 'narration',
           content: lang === 'zh-CN' 
             ? `场景开始于${blueprint.setting}。${blueprint.premise}` 
             : `The scene opens in ${blueprint.setting}. ${blueprint.premise}`,
@@ -875,7 +886,7 @@ export default function App() {
   const handleImportGlobalCharacter = (globalChar: GlobalCharacter) => {
       if (!currentScript) return;
       const newChar: Character = {
-          id: crypto.randomUUID(),
+          id: generateId(),
           name: globalChar.name,
           role: "Extra", // Default role, user can edit
           personality: globalChar.personality,
@@ -967,7 +978,7 @@ export default function App() {
       
       // Add a visual separator for the chapter
       const newMessage: Message = { 
-          id: crypto.randomUUID(), 
+          id: generateId(), 
           characterId: 'narrator', 
           content: `>>> ${t.chapter} ${nextIndex + 1}: ${nextChapterPlan}`, 
           type: 'narration', 
@@ -1485,7 +1496,7 @@ export default function App() {
             {editorStep === 2 && (
               <div className="space-y-6">
                 <div className="flex gap-4">
-                    <Button className="flex-1" variant="secondary" icon={Plus} onClick={() => updateScriptState({...currentScript, characters: [...currentScript.characters, { id: crypto.randomUUID(), name: "New Char", role: "Extra", personality: "Neutral", speakingStyle: "Normal", visualDescription: "...", isUserControlled: false }]})}>{t.addActor}</Button>
+                    <Button className="flex-1" variant="secondary" icon={Plus} onClick={() => updateScriptState({...currentScript, characters: [...currentScript.characters, { id: generateId(), name: "New Char", role: "Extra", personality: "Neutral", speakingStyle: "Normal", visualDescription: "...", isUserControlled: false }]})}>{t.addActor}</Button>
                     <Button className="flex-1 bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border-emerald-500/30 hover:border-emerald-500/50" icon={Sparkles} onClick={handleAiAddCharacter}>{t.aiAddActor}</Button>
                     {globalCharacters.length > 0 && (
                         <div className="relative group">
@@ -1779,7 +1790,7 @@ export default function App() {
                                              if (e.key === 'Enter' && userInputs[char.id]) {
                                                  const text = userInputs[char.id];
                                                  setUserInputs({...userInputs, [char.id]: ''});
-                                                 const msg: Message = { id: crypto.randomUUID(), characterId: char.id, content: text, type: 'dialogue', timestamp: Date.now() };
+                                                 const msg: Message = { id: generateId(), characterId: char.id, content: text, type: 'dialogue', timestamp: Date.now() };
                                                  handleUpdateScriptHistory(msg);
                                              }
                                          }}
@@ -1788,7 +1799,7 @@ export default function App() {
                                           const text = userInputs[char.id];
                                           if (!text) return;
                                           setUserInputs({...userInputs, [char.id]: ''});
-                                          const msg: Message = { id: crypto.randomUUID(), characterId: char.id, content: text, type: 'dialogue', timestamp: Date.now() };
+                                          const msg: Message = { id: generateId(), characterId: char.id, content: text, type: 'dialogue', timestamp: Date.now() };
                                           handleUpdateScriptHistory(msg);
                                      }} />
                                  </div>

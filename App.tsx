@@ -147,7 +147,7 @@ function MainApp() {
     return saved ? JSON.parse(saved) : { apiKey: '', activeProvider: 'GEMINI' };
   });
 
-  // Views: DASHBOARD -> CHAR_SELECT -> PLOT_BUILDER -> STAGE (Group Chat UI)
+  // Views: DASHBOARD -> CHAR_SELECT -> PLOT_BUILDER -> STAGE (Group Chat UI) -> CHAT (1-on-1)
   const [view, setView] = useState<'DASHBOARD' | 'CHAR_SELECT' | 'PLOT_BUILDER' | 'STAGE' | 'CHAT'>('DASHBOARD');
   
   const [dashboardTab, setDashboardTab] = useState<'SCRIPTS' | 'TEMPLATES' | 'CHARACTERS' | 'COMMUNITY' | 'ACHIEVEMENTS'>('CHARACTERS');
@@ -192,6 +192,7 @@ function MainApp() {
   const [notification, setNotification] = useState<{title: string, msg: string, type?: 'error' | 'success'} | null>(null);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const singleChatEndRef = useRef<HTMLDivElement>(null);
   const directorQueueRef = useRef<string[]>([]);
 
   // Init
@@ -217,6 +218,7 @@ function MainApp() {
   useEffect(() => { if (currentUser) authService.saveScripts(currentUser.id, scripts); }, [scripts, currentUser]);
   useEffect(() => { if (currentUser) authService.saveGlobalCharacters(currentUser.id, globalCharacters); }, [globalCharacters, currentUser]);
   useEffect(() => { if (view === 'STAGE' && chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [currentScript?.history, view]);
+  useEffect(() => { if (view === 'CHAT' && singleChatEndRef.current) singleChatEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [activeChatSession?.messages, view]);
 
   // Game Loop
   useEffect(() => {
@@ -384,7 +386,7 @@ function MainApp() {
       setView('STAGE');
   };
 
-  // --- Character & Chat Handlers (Similar to before) ---
+  // --- Character & Chat Handlers ---
   const handleSaveGlobalCharacter = async () => {
      if (!editingChar?.name || !currentUser) return;
      const newChar: GlobalCharacter = {
@@ -404,6 +406,80 @@ function MainApp() {
      }
      setShowCharModal(false); setEditingChar(null);
   };
+
+  const handleStartChat = async (character: GlobalCharacter) => {
+      if (!currentUser) return;
+      let session = await authService.getChatSession(currentUser.id, character.id);
+      if (!session) {
+          session = {
+              id: generateId(),
+              userId: currentUser.id,
+              characterId: character.id,
+              messages: [],
+              lastUpdated: Date.now()
+          };
+      }
+      setActiveChatSession(session);
+      setView('CHAT');
+  };
+
+  const handleSendChatMessage = async () => {
+      if (!chatInput.trim() || !activeChatSession) return;
+      const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
+      if(!char) return;
+
+      const userMsg: ChatMessage = { id: generateId(), role: 'user', content: chatInput, timestamp: Date.now() };
+      const updatedSession = { ...activeChatSession, messages: [...activeChatSession.messages, userMsg], lastUpdated: Date.now() };
+      
+      setActiveChatSession(updatedSession);
+      setChatInput('');
+      setIsChatting(true);
+
+      try {
+          const response = await chatWithCharacter(char, updatedSession.messages, userMsg.content, appSettings);
+          const aiMsg: ChatMessage = { 
+              id: generateId(), 
+              role: 'model', 
+              content: response.text, 
+              timestamp: Date.now(),
+              mediaUrl: response.mediaUrl,
+              mediaType: response.mediaType 
+          };
+          
+          const finalSession = { ...updatedSession, messages: [...updatedSession.messages, aiMsg], lastUpdated: Date.now() };
+          setActiveChatSession(finalSession);
+          authService.saveChatSession(finalSession);
+          setSessionUpdated(true); // Mark for evolution
+      } catch (e) {
+          showNotification("错误", "消息发送失败", 'error');
+      } finally {
+          setIsChatting(false);
+      }
+  };
+
+  const handleExitChat = async () => {
+      if (sessionUpdated && activeChatSession) {
+          const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
+          if (char) {
+             showNotification("保存中", "正在总结记忆并更新角色性格...", 'success');
+             try {
+                 const evolution = await evolveCharacterFromChat(char, activeChatSession.messages, appSettings);
+                 const updatedChar = {
+                     ...char,
+                     personality: evolution.newPersonality,
+                     speakingStyle: evolution.newSpeakingStyle,
+                     memories: [...(char.memories || []), evolution.memory].filter(Boolean)
+                 };
+                 setGlobalCharacters(prev => prev.map(c => c.id === char.id ? updatedChar : c));
+                 // Implicitly saved via useEffect
+             } catch(e) {}
+          }
+      }
+      setView('DASHBOARD');
+      setActiveChatSession(null);
+      setSessionUpdated(false);
+  };
+
 
   // --- Render Views ---
 
@@ -466,6 +542,7 @@ function MainApp() {
                                        <p className="text-xs text-zinc-500">{c.gender}, {c.age}</p>
                                        <div className="flex justify-center gap-2 mt-3">
                                            <button onClick={() => { setEditingChar(c); setShowCharModal(true); }} className="p-1.5 bg-zinc-800 rounded text-zinc-400 hover:text-white"><Edit3 size={14}/></button>
+                                           <button onClick={() => handleStartChat(c)} className="p-1.5 bg-zinc-800 rounded text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/30"><MessageSquare size={14}/></button>
                                        </div>
                                    </div>
                                </div>
@@ -742,6 +819,87 @@ function MainApp() {
     );
   };
 
+  const renderChatInterface = () => {
+      if (!activeChatSession) return null;
+      const character = globalCharacters.find(c => c.id === activeChatSession.characterId);
+      if (!character) return null;
+
+      return (
+          <div className="h-screen bg-zinc-950 flex flex-col">
+              {/* Header */}
+              <div className="p-4 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center shadow-md z-10">
+                  <div className="flex items-center gap-3">
+                      <Button variant="ghost" icon={ChevronLeft} onClick={handleExitChat}>返回</Button>
+                      <Avatar name={character.name} url={character.avatarUrl} size="sm" />
+                      <div>
+                          <h2 className="text-white font-bold">{character.name}</h2>
+                          <p className="text-xs text-zinc-500">{character.personality}</p>
+                      </div>
+                  </div>
+              </div>
+
+              {/* Chat Area */}
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-zinc-950">
+                   {activeChatSession.messages.map(msg => {
+                       const isUser = msg.role === 'user';
+                       return (
+                           <div key={msg.id} className={`flex gap-3 max-w-2xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
+                               <Avatar 
+                                  name={isUser ? currentUser?.username || 'Me' : character.name} 
+                                  url={isUser ? undefined : character.avatarUrl}
+                                  size="sm"
+                               />
+                               <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+                                   <div className={`px-4 py-2.5 rounded-2xl text-sm shadow-md whitespace-pre-wrap leading-relaxed ${
+                                       isUser 
+                                       ? 'bg-indigo-600 text-white rounded-tr-none' 
+                                       : 'bg-zinc-800 text-zinc-200 rounded-tl-none'
+                                   }`}>
+                                       {msg.content}
+                                   </div>
+                                   {msg.mediaUrl && (
+                                       <div className="mt-2 rounded-xl overflow-hidden shadow-lg border border-zinc-700 max-w-xs">
+                                           {msg.mediaType === 'video' ? (
+                                               <video src={msg.mediaUrl} controls className="w-full h-auto" />
+                                           ) : (
+                                               <img src={msg.mediaUrl} alt="Generated content" className="w-full h-auto object-cover" />
+                                           )}
+                                       </div>
+                                   )}
+                                   <span className="text-[10px] text-zinc-600 mt-1 px-1">
+                                       {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                   </span>
+                               </div>
+                           </div>
+                       );
+                   })}
+                   {isChatting && (
+                       <div className="flex gap-3 mr-auto max-w-2xl">
+                           <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse"></div>
+                           <div className="bg-zinc-800 h-10 w-32 rounded-2xl rounded-tl-none animate-pulse"></div>
+                       </div>
+                   )}
+                   <div ref={singleChatEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="p-4 bg-zinc-900 border-t border-zinc-800">
+                  <div className="max-w-3xl mx-auto relative flex gap-2">
+                       <input 
+                           className="flex-1 bg-zinc-950 border border-zinc-700 rounded-full px-5 py-3 text-white focus:outline-none focus:border-indigo-500 shadow-inner"
+                           placeholder={`发送给 ${character.name}... (试着说: "画一张...")`}
+                           value={chatInput}
+                           onChange={e => setChatInput(e.target.value)}
+                           onKeyDown={e => e.key === 'Enter' && handleSendChatMessage()}
+                           disabled={isChatting}
+                       />
+                       <Button onClick={handleSendChatMessage} disabled={isChatting || !chatInput.trim()} variant="primary" icon={isChatting ? Loader2 : Send} className="rounded-full w-12 h-12 flex items-center justify-center p-0" />
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
   const renderCharacterModal = () => (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col h-[85vh]">
@@ -831,6 +989,7 @@ function MainApp() {
       {view === 'CHAR_SELECT' && renderCharacterSelector()}
       {view === 'PLOT_BUILDER' && renderPlotBuilder()}
       {view === 'STAGE' && renderStage()}
+      {view === 'CHAT' && renderChatInterface()}
       {showCharModal && renderCharacterModal()}
     </>
   );

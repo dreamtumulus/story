@@ -7,13 +7,14 @@ import {
   Wand2, RefreshCw, LayoutDashboard, Film, BookOpen, Crown, Clapperboard,
   LogOut, User as UserIcon, Key, X, AlertCircle, Loader2, Shuffle,
   Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit, Video,
-  Filter
+  Filter, FileText, Book
 } from 'lucide-react';
-import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage } from './types';
+import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage, NovelStyle } from './types';
 import { 
     generateScriptBlueprint, generateNextBeat, generateAvatarImage, 
     refineText, generateSceneImage, regenerateFuturePlot, generateSingleCharacter,
-    completeCharacterProfile, chatWithCharacter, evolveCharacterFromChat
+    completeCharacterProfile, chatWithCharacter, evolveCharacterFromChat,
+    generateNextChapterPlan, autoCompleteStory, generateNovelVersion
 } from './services/aiService';
 import { authService } from './services/authService';
 
@@ -154,6 +155,17 @@ const TRANSLATIONS = {
     filterAll: "全部角色",
     filterMale: "男性",
     filterFemale: "女性",
+    planNextChapter: "策划下一章",
+    currentPlan: "原定剧情计划",
+    regeneratePlan: "AI 重新策划",
+    confirmAndPlay: "开始演绎",
+    jumpToEnding: "直接进入结局",
+    autoComplete: "快速完结",
+    exportNovel: "导出小说",
+    novelStyle: "写作风格",
+    generatingNovel: "正在撰写小说...",
+    downloadNovel: "下载小说",
+    fastForwarding: "正在快速演绎剩余剧情...",
   },
   'en-US': {
     title: "Daydreaming",
@@ -255,6 +267,17 @@ const TRANSLATIONS = {
     filterAll: "All Characters",
     filterMale: "Male",
     filterFemale: "Female",
+    planNextChapter: "Plan Next Chapter",
+    currentPlan: "Original Plan",
+    regeneratePlan: "AI Regenerate Plan",
+    confirmAndPlay: "Start Scene",
+    jumpToEnding: "Jump to Ending",
+    autoComplete: "Fast Finish",
+    exportNovel: "Export Novel",
+    novelStyle: "Writer Style",
+    generatingNovel: "Writing novel...",
+    downloadNovel: "Download Novel",
+    fastForwarding: "Fast-forwarding remaining scenes...",
   }
 };
 
@@ -383,6 +406,16 @@ export default function App() {
   const [userInputs, setUserInputs] = useState<{[key: string]: string}>({});
   const [directorInput, setDirectorInput] = useState('');
   const [isReconstructing, setIsReconstructing] = useState(false);
+  const [isFastForwarding, setIsFastForwarding] = useState(false);
+  
+  // --- New Stage Modal States ---
+  const [showChapterPlanner, setShowChapterPlanner] = useState(false);
+  const [nextChapterPlan, setNextChapterPlan] = useState('');
+  const [isPlanning, setIsPlanning] = useState(false);
+  const [showNovelModal, setShowNovelModal] = useState(false);
+  const [novelStyle, setNovelStyle] = useState<NovelStyle>('STANDARD');
+  const [generatedNovelText, setGeneratedNovelText] = useState('');
+  const [isGeneratingNovel, setIsGeneratingNovel] = useState(false);
   
   // Director Queue Buffer for God Mode
   const directorQueueRef = useRef<string[]>([]);
@@ -431,7 +464,7 @@ export default function App() {
   useEffect(() => {
     if (!currentScript || view !== 'STAGE') return;
     if (!isPlaying && !turnProcessing && !isReconstructing) { /* Idle */ }
-    if (turnProcessing || isReconstructing || !isPlaying) return;
+    if (turnProcessing || isReconstructing || !isPlaying || isFastForwarding) return;
 
     const gameLoop = async () => {
       setTurnProcessing(true);
@@ -495,7 +528,7 @@ export default function App() {
     // Aggressive loop speed for responsiveness
     const timer = setTimeout(gameLoop, 500);
     return () => clearTimeout(timer);
-  }, [isPlaying, currentScript, view, turnProcessing, lang, appSettings, isReconstructing]);
+  }, [isPlaying, currentScript, view, turnProcessing, lang, appSettings, isReconstructing, isFastForwarding]);
 
 
   // --- Handlers ---
@@ -883,16 +916,120 @@ export default function App() {
     if (!isPlaying) setIsPlaying(true);
   };
 
-  const handleNextChapter = () => {
+  // --- Chapter Planner Logic ---
+
+  const handleNextChapter = async () => {
     if (!currentScript) return;
+    setIsPlaying(false); // Pause first
+    
     const currentIndex = currentScript.currentPlotIndex || 0;
-    if (currentIndex >= currentScript.plotPoints.length - 1) return;
-    const newIndex = currentIndex + 1;
-    const nextPlot = currentScript.plotPoints[newIndex];
-    updateScriptState({ ...currentScript, currentPlotIndex: newIndex });
-    const newMessage: Message = { id: crypto.randomUUID(), characterId: 'narrator', content: `>>> ${t.chapter} ${newIndex + 1}: ${nextPlot}`, type: 'narration', timestamp: Date.now() };
-    handleUpdateScriptHistory(newMessage);
-    if (!isPlaying) setIsPlaying(true);
+    if (currentIndex >= currentScript.plotPoints.length - 1) {
+        showNotification("End", "This is the final chapter.", 'success');
+        return;
+    }
+    
+    const nextIndex = currentIndex + 1;
+    const existingPlan = currentScript.plotPoints[nextIndex];
+    
+    setNextChapterPlan(existingPlan);
+    setShowChapterPlanner(true);
+  };
+
+  const handleRegeneratePlan = async () => {
+      if (!currentScript) return;
+      setIsPlanning(true);
+      try {
+          const currentIndex = currentScript.currentPlotIndex || 0;
+          const originalPlan = currentScript.plotPoints[currentIndex + 1];
+          const newPlan = await generateNextChapterPlan(currentScript, originalPlan, appSettings);
+          setNextChapterPlan(newPlan);
+      } catch (e) {
+          showNotification("Error", "Failed to regenerate plan", 'error');
+      } finally {
+          setIsPlanning(false);
+      }
+  };
+
+  const confirmNextChapter = () => {
+      if (!currentScript) return;
+      const currentIndex = currentScript.currentPlotIndex || 0;
+      const nextIndex = currentIndex + 1;
+      
+      const newPlotPoints = [...currentScript.plotPoints];
+      newPlotPoints[nextIndex] = nextChapterPlan;
+      
+      const updatedScript = {
+          ...currentScript,
+          plotPoints: newPlotPoints,
+          currentPlotIndex: nextIndex
+      };
+      updateScriptState(updatedScript);
+      
+      // Add a visual separator for the chapter
+      const newMessage: Message = { 
+          id: crypto.randomUUID(), 
+          characterId: 'narrator', 
+          content: `>>> ${t.chapter} ${nextIndex + 1}: ${nextChapterPlan}`, 
+          type: 'narration', 
+          timestamp: Date.now() 
+      };
+      handleUpdateScriptHistory(newMessage);
+      
+      setShowChapterPlanner(false);
+      setIsPlaying(true);
+  };
+
+  const handleFastForward = async () => {
+      if (!currentScript) return;
+      setIsFastForwarding(true);
+      setIsPlaying(false);
+      try {
+          const summaryMessages = await autoCompleteStory(currentScript, appSettings);
+          
+          let updatedHistory = [...currentScript.history, ...summaryMessages];
+          const updatedScript = {
+              ...currentScript,
+              history: updatedHistory,
+              currentPlotIndex: currentScript.plotPoints.length // Mark as done
+          };
+          updateScriptState(updatedScript);
+          showNotification("Complete", "Story fast-forwarded successfully!", 'success');
+      } catch (e) {
+          showNotification("Error", "Fast forward failed", 'error');
+      } finally {
+          setIsFastForwarding(false);
+      }
+  };
+
+  // --- Novel Export Logic ---
+  
+  const handleOpenNovelModal = () => {
+      setGeneratedNovelText(currentScript?.novelText || '');
+      setShowNovelModal(true);
+  };
+
+  const handleGenerateNovel = async () => {
+      if (!currentScript) return;
+      setIsGeneratingNovel(true);
+      try {
+          const text = await generateNovelVersion(currentScript, novelStyle, appSettings);
+          setGeneratedNovelText(text);
+          updateScriptState({ ...currentScript, novelText: text });
+      } catch (e) {
+          showNotification("Error", "Failed to write novel", 'error');
+      } finally {
+          setIsGeneratingNovel(false);
+      }
+  };
+
+  const handleDownloadNovel = () => {
+      if (!generatedNovelText) return;
+      const element = document.createElement("a");
+      const file = new Blob([generatedNovelText], {type: 'text/plain'});
+      element.href = URL.createObjectURL(file);
+      element.download = `${currentScript?.title || 'Story'}_${novelStyle}.txt`;
+      document.body.appendChild(element);
+      element.click();
   };
 
   // --- Views ---
@@ -1402,6 +1539,96 @@ export default function App() {
     );
   };
 
+  // --- Chapter Planner Modal ---
+  const renderChapterPlanner = () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden p-6 relative">
+              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                  <Film size={20} className="text-indigo-400"/> {t.planNextChapter}
+              </h2>
+              
+              <div className="space-y-4">
+                  <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.currentPlan}</label>
+                      <textarea 
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-white min-h-[120px] focus:border-indigo-500 outline-none"
+                          value={nextChapterPlan}
+                          onChange={e => setNextChapterPlan(e.target.value)}
+                      />
+                  </div>
+                  
+                  <div className="flex gap-2">
+                      <Button variant="secondary" className="flex-1 text-xs" onClick={handleRegeneratePlan} disabled={isPlanning} icon={isPlanning ? Loader2 : Sparkles}>
+                          {t.regeneratePlan}
+                      </Button>
+                      <Button variant="danger" className="flex-1 text-xs" onClick={() => { setNextChapterPlan("Finale: All plot threads resolve unexpectedly."); }} icon={SkipForward}>
+                          {t.jumpToEnding}
+                      </Button>
+                  </div>
+              </div>
+
+              <div className="mt-8 flex justify-end gap-4 border-t border-zinc-800 pt-4">
+                  <Button variant="ghost" onClick={() => setShowChapterPlanner(false)}>{t.close}</Button>
+                  <Button variant="primary" onClick={confirmNextChapter} icon={Play}>{t.confirmAndPlay}</Button>
+              </div>
+          </div>
+      </div>
+  );
+
+  // --- Novel Export Modal ---
+  const renderNovelModal = () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl h-[85vh] shadow-2xl overflow-hidden flex flex-col">
+              <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-800/50">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Book size={20} className="text-amber-400"/> {t.exportNovel}
+                  </h2>
+                  <button onClick={() => setShowNovelModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
+              </div>
+
+              <div className="flex-1 flex overflow-hidden">
+                  <div className="w-1/3 bg-zinc-950 p-6 border-r border-zinc-800 space-y-6">
+                       <div>
+                           <label className="text-xs font-bold text-zinc-500 uppercase block mb-3">{t.novelStyle}</label>
+                           <div className="space-y-2">
+                               {['STANDARD', 'JIN_YONG', 'CIXIN_LIU', 'HEMINGWAY', 'AUSTEN', 'LU_XUN'].map(s => (
+                                   <div key={s} 
+                                      onClick={() => setNovelStyle(s as NovelStyle)}
+                                      className={`p-3 rounded-xl border cursor-pointer transition-all ${novelStyle === s ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700'}`}
+                                   >
+                                       <div className="font-bold text-sm">{s.replace('_', ' ')}</div>
+                                   </div>
+                               ))}
+                           </div>
+                       </div>
+                       <Button onClick={handleGenerateNovel} disabled={isGeneratingNovel} variant="primary" className="w-full" icon={isGeneratingNovel ? Loader2 : Sparkles}>
+                           {isGeneratingNovel ? t.generatingNovel : "Generate Novel"}
+                       </Button>
+                  </div>
+                  
+                  <div className="w-2/3 bg-zinc-900 p-8 overflow-y-auto font-serif text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                      {generatedNovelText ? (
+                          <div className="max-w-xl mx-auto">
+                              <h1 className="text-3xl font-bold text-white text-center mb-8">{currentScript?.title}</h1>
+                              <div className="text-lg">{generatedNovelText}</div>
+                          </div>
+                      ) : (
+                          <div className="h-full flex flex-col items-center justify-center text-zinc-600 opacity-50">
+                              <Book size={48} className="mb-4"/>
+                              <p>Select a style and generate your novel.</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+
+              <div className="p-4 border-t border-zinc-800 bg-zinc-900 flex justify-end">
+                  <Button onClick={handleDownloadNovel} disabled={!generatedNovelText} variant="secondary" icon={Download}>{t.downloadNovel}</Button>
+              </div>
+          </div>
+      </div>
+  );
+
+
   const renderStage = () => {
     if (!currentScript) return null;
     const userCharacters = (currentScript.characters || []).filter(c => c.isUserControlled);
@@ -1436,6 +1663,13 @@ export default function App() {
                 <p className="text-zinc-500 text-sm mt-2">{t.commandQueued}</p>
             </div>
         )}
+        
+        {isFastForwarding && (
+             <div className="absolute inset-0 z-50 bg-indigo-900/90 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
+                <Zap size={64} className="text-yellow-400 animate-bounce mb-6 drop-shadow-lg"/>
+                <h3 className="text-white font-bold text-2xl tracking-widest uppercase">{t.fastForwarding}</h3>
+            </div>
+        )}
 
         {/* Header Overlay */}
         <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
@@ -1447,6 +1681,12 @@ export default function App() {
                  </div>
              </div>
              <div className="flex gap-2">
+                 {/* New Novel Export Button */}
+                 <Button size="sm" variant="secondary" icon={Book} onClick={handleOpenNovelModal}>{t.exportNovel}</Button>
+                 
+                 {/* New Fast Finish Button */}
+                 <Button size="sm" variant="secondary" icon={Zap} onClick={handleFastForward} className="text-yellow-400 border-yellow-500/20 hover:bg-yellow-500/10">{t.autoComplete}</Button>
+                 
                  <Button size="sm" variant="secondary" icon={SkipForward} onClick={handleNextChapter}>{t.skipChapter}</Button>
                  <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={isPlaying ? Pause : Play} onClick={() => setIsPlaying(!isPlaying)}>
                      {isPlaying ? t.paused : t.resumeAuto}
@@ -1636,6 +1876,8 @@ export default function App() {
       {view === 'CHAT' && renderChatInterface()}
       
       {showCharModal && renderCharacterModal()}
+      {showChapterPlanner && renderChapterPlanner()}
+      {showNovelModal && renderNovelModal()}
       {renderSettings()}
     </>
   );

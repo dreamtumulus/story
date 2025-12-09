@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, FunctionDeclaration, Tool } from "@google/genai";
-import { Script, Character, Message, Language, AppSettings, GlobalCharacter, ChatMessage } from "../types";
+import { Script, Character, Message, Language, AppSettings, GlobalCharacter, ChatMessage, NovelStyle } from "../types";
 
 const TEXT_MODEL = 'gemini-2.5-flash';
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
@@ -696,6 +696,154 @@ export const regenerateFuturePlot = async (
         }
 
         return data.newPlotPoints || script.plotPoints;
+    });
+};
+
+/**
+ * Suggests the NEXT chapter plan based on what just happened.
+ * Allows AI to pivot instead of blindly following the original outline.
+ */
+export const generateNextChapterPlan = async (
+    script: Script, 
+    upcomingPlotPoint: string,
+    settings?: AppSettings
+): Promise<string> => {
+    return withRetry(async () => {
+        const historySummary = script.history.slice(-15).map(h => `${h.characterId === 'narrator' ? 'Narration' : h.characterId}: ${h.content}`).join("\n");
+        const promptText = `
+            Title: ${script.title}
+            Story So Far (Last 15 turns): 
+            ${historySummary}
+            
+            Original Plan for Next Chapter: "${upcomingPlotPoint}"
+
+            Task: Propose a refined, single-sentence goal for the NEXT chapter. 
+            - If the story naturally drifted, propose a new goal that fits better.
+            - If the original plan is still good, make it more specific based on recent context.
+            - Keep it dramatic.
+
+            IMPORTANT: Respond in Simplified Chinese (简体中文). Return ONLY the string of the new plot plan.
+        `;
+
+        if (settings?.activeProvider === 'OPENROUTER') {
+            return await callOpenRouter(settings, [{ role: "user", content: promptText }]);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: promptText
+            });
+            return response.text?.trim() || upcomingPlotPoint;
+        }
+    });
+};
+
+/**
+ * Auto-Completes the story by generating narration for ALL remaining plot points.
+ */
+export const autoCompleteStory = async (
+    script: Script,
+    settings?: AppSettings
+): Promise<Message[]> => {
+    return withRetry(async () => {
+        const remainingPlots = script.plotPoints.slice(script.currentPlotIndex);
+        if (remainingPlots.length === 0) return [];
+
+        const historySummary = script.history.slice(-10).map(h => h.content).join(" ");
+        const promptText = `
+            Title: ${script.title}
+            Recent Context: ${historySummary}
+            Remaining Chapters: ${JSON.stringify(remainingPlots)}
+            
+            Task: The user wants to "Fast Forward" to the end.
+            Generate a concise but beautifully written paragraph of narration for EACH remaining chapter to wrap up the story.
+            
+            IMPORTANT: Respond in Simplified Chinese (简体中文).
+            Return a JSON array of strings, where each string is the narration for one chapter.
+            { "narrations": ["Chapter X narration...", "Chapter Y narration...", "Ending narration..."] }
+        `;
+
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+            data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: promptText,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            narrations: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        }
+                    }
+                }
+            });
+            data = safeJsonParse(response.text || "{}", {});
+        }
+
+        const narrations = data.narrations || [];
+        return narrations.map((content: string) => ({
+            id: crypto.randomUUID(),
+            characterId: 'narrator',
+            type: 'narration',
+            content: content,
+            timestamp: Date.now()
+        }));
+    });
+};
+
+/**
+ * Generates a full Novel version of the script history in a specific style.
+ */
+export const generateNovelVersion = async (
+    script: Script,
+    style: NovelStyle,
+    settings?: AppSettings
+): Promise<string> => {
+    return withRetry(async () => {
+        // We use the whole history if possible, or a large chunk. 
+        // Gemini has a large context window, so we try to pass most of it.
+        const fullHistory = script.history.map(h => {
+            const charName = script.characters.find(c => c.id === h.characterId)?.name || "Narrator";
+            return `${charName}: ${h.content}`;
+        }).join("\n");
+        
+        const stylePrompts: Record<NovelStyle, string> = {
+            'STANDARD': 'Standard Professional Novelist (Standard)',
+            'JIN_YONG': 'Jin Yong (Wuxia/Martial Arts Style - vivid action, chivalry)',
+            'CIXIN_LIU': 'Cixin Liu (Hard Sci-Fi/Grand Scale/Philosophical)',
+            'HEMINGWAY': 'Ernest Hemingway (Concise, direct, understated)',
+            'AUSTEN': 'Jane Austen (Regency Romance, witty, social commentary)',
+            'LU_XUN': 'Lu Xun (Critical realism, sharp, satirical)'
+        };
+
+        const promptText = `
+            You are a ghostwriter mimicking the style of: ${stylePrompts[style]}.
+            
+            Task: Convert the following Script/Chat Log into a high-quality Novel Chapter.
+            - Do NOT use script format (Character: "Text"). Use proper prose ("Text," said Character.).
+            - Enrich the descriptions, internal monologues, and atmosphere based on the style.
+            - Include the plot twists and user interventions (God Mode) naturally.
+            - Language: Simplified Chinese (简体中文).
+            
+            Script Title: ${script.title}
+            Script History:
+            ${fullHistory}
+        `;
+
+        if (settings?.activeProvider === 'OPENROUTER') {
+            return await callOpenRouter(settings, [{ role: "user", content: promptText }]);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: promptText
+            });
+            return response.text || "Failed to generate novel.";
+        }
     });
 };
 

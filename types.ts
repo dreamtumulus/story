@@ -83,6 +83,8 @@ export interface Message {
   imageUrl?: string; // URL for scene illustration
 }
 
+export type NovelStyle = 'STANDARD' | 'JIN_YONG' | 'CIXIN_LIU' | 'HEMINGWAY' | 'AUSTEN' | 'LU_XUN';
+
 export interface Script {
   id: string;
   ownerId: string; // Connect to User
@@ -106,6 +108,9 @@ export interface Script {
     likes: number;
     downloads: number;
   };
+
+  // Novel Export
+  novelText?: string;
 }
 
 export interface Achievement {

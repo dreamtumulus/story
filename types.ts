@@ -7,7 +7,6 @@ export enum Role {
 
 export type Language = 'zh-CN' | 'en-US';
 
-// 用户信息定义
 export interface User {
   id: string;
   username: string;
@@ -15,43 +14,37 @@ export interface User {
   createdAt: number;
 }
 
-// 应用设置接口
 export interface AppSettings {
-  apiKey?: string; // Google Gemini API Key
+  apiKey?: string;
   baseUrl?: string;
   
-  // 多模型支持配置 (OpenRouter)
+  // New fields for multi-model support
   activeProvider?: 'GEMINI' | 'OPENROUTER';
   openRouterKey?: string;
-  openRouterModel?: string; // 例如: 'google/gemini-2.0-flash-001'
+  openRouterModel?: string; // e.g., 'google/gemini-2.0-flash-001'
 }
 
-// 剧本中的角色定义 (Local Character)
-// 这是特定于某个剧本的实例，可能会随着剧情发展而产生状态变化
 export interface Character {
   id: string;
   name: string;
-  role: string; // 在剧本中的角色定位 (例如: 侦探, 凶手)
-  personality: string; // 性格特征
-  speakingStyle: string; // 语言风格
-  visualDescription: string; // 外貌描述 (用于生成头像)
+  role: string; // In a script, this is their role (e.g. Detective). 
+  personality: string;
+  speakingStyle: string;
+  visualDescription: string;
   avatarUrl?: string; 
-  isUserControlled: boolean; // 是否由用户扮演
+  isUserControlled: boolean;
   
-  // 关联全局角色库的字段
+  // New fields for Global Characters
   gender?: string;
   age?: string;
-  isGlobal?: boolean; // 如果为true，则链接到 GlobalCharacter
+  isGlobal?: boolean; // If true, linked to a GlobalCharacter
   globalId?: string;
 }
 
-// 全局角色定义 (Global Character)
-// 存储在角色库中，可以在多个剧本中复用，拥有长期记忆
 export interface GlobalCharacter {
   id: string;
   ownerId: string;
   name: string;
-  role?: string; // 角色身份/职业
   gender: string;
   age: string;
   personality: string;
@@ -60,59 +53,52 @@ export interface GlobalCharacter {
   avatarUrl?: string;
   createdAt: number;
   
-  // 记忆与进化系统
-  memories?: string[]; // 从聊天中总结的事实或经历，用于增强长期记忆
+  // Memory & Evolution
+  memories?: string[]; // Summarized facts/experiences from chats
 }
 
-// 聊天消息结构
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   content: string;
   timestamp: number;
-  mediaUrl?: string; // 如果包含图片或视频
+  mediaUrl?: string;
   mediaType?: 'image' | 'video';
 }
 
-// 聊天会话 (陪伴模式)
 export interface ChatSession {
   id: string;
-  characterId: string; // 关联 GlobalCharacter
+  characterId: string; // Links to GlobalCharacter
   userId: string;
   messages: ChatMessage[];
   lastUpdated: number;
 }
 
-// 剧本演绎中的单条消息 (对话/动作/旁白)
 export interface Message {
   id: string;
-  characterId: string; // 'narrator' 代表旁白，否则为角色UUID
+  characterId: string; // 'narrator' or character UUID
   content: string;
   type: 'dialogue' | 'action' | 'narration';
   timestamp: number;
-  imageUrl?: string; // 场景插图 URL
+  imageUrl?: string; // URL for scene illustration
 }
 
-// 小说写作风格枚举
-export type NovelStyle = 'STANDARD' | 'JIN_YONG' | 'CIXIN_LIU' | 'HEMINGWAY' | 'AUSTEN' | 'LU_XUN';
-
-// 核心剧本结构
 export interface Script {
   id: string;
-  ownerId: string; // 关联 User
+  ownerId: string; // Connect to User
   title: string;
-  premise: string; // 故事前提/梗概
-  setting: string; // 场景设定
-  plotPoints: string[]; // 剧情大纲 (章节列表)
+  premise: string;
+  setting: string;
+  plotPoints: string[]; 
   possibleEndings: string[]; 
-  characters: Character[]; // 参与该剧本的角色列表
-  history: Message[]; // 演绎历史记录 (即正文)
+  characters: Character[];
+  history: Message[];
   lastUpdated: number;
   
-  // 进度追踪
-  currentPlotIndex: number; // 当前进行到的剧情节点索引
+  // Progress Tracking
+  currentPlotIndex: number;
 
-  // 模版与社区功能
+  // Template & Community fields
   isTemplate?: boolean;
   author?: string;
   isPublished?: boolean;
@@ -120,12 +106,8 @@ export interface Script {
     likes: number;
     downloads: number;
   };
-
-  // 小说导出内容
-  novelText?: string;
 }
 
-// 成就系统
 export interface Achievement {
   id: string;
   title: string;
@@ -138,7 +120,6 @@ export interface Achievement {
   reward?: string;
 }
 
-// 生成配置
 export interface GenerationConfig {
   apiKey?: string;
   modelText: string;

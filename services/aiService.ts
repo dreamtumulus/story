@@ -1,63 +1,31 @@
-
 import { GoogleGenAI, Type, FunctionDeclaration, Tool } from "@google/genai";
-import { Script, Character, Message, Language, AppSettings, GlobalCharacter, ChatMessage, NovelStyle } from "../types";
+import { Script, Character, Message, Language, AppSettings, GlobalCharacter, ChatMessage } from "../types";
 
-// --- 模型常量定义 ---
 const TEXT_MODEL = 'gemini-2.5-flash';
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 const VIDEO_MODEL = 'veo-3.1-fast-generate-preview';
 const DEFAULT_GEMINI_KEY = 'AIzaSyC6zQSEAAdLRgOMR6_CwQ1sSNVur0_vpW0';
 
-// --- 超时设置 ---
-const STANDARD_TIMEOUT = 60000; 
-const HEAVY_TASK_TIMEOUT = 180000;
-
-// --- UUID Polyfill ---
-export const generateId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-};
-
-// --- 安全的环境变量获取 ---
-const getEnvVar = (key: string): string | undefined => {
-    try {
-        if (typeof process !== 'undefined' && process.env) {
-            return process.env[key];
-        }
-    } catch (e) {}
-    try {
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) {
-            // @ts-ignore
-            return import.meta.env[key];
-        }
-    } catch (e) {}
-    return undefined;
-};
-
+// --- Helper to get Effective Gemini Key ---
 const getGeminiKey = (settings?: AppSettings) => {
-    return settings?.apiKey || getEnvVar('API_KEY') || DEFAULT_GEMINI_KEY;
+    return settings?.apiKey || process.env.API_KEY || DEFAULT_GEMINI_KEY;
 };
 
+// --- Helper to get Client (Gemini) ---
 const getClient = (settings?: AppSettings) => {
     const apiKey = getGeminiKey(settings);
     if (!apiKey) throw new Error("No API Key");
     return new GoogleGenAI({ apiKey });
 };
 
+// --- Helper for Timeout ---
 const timeoutPromise = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), ms));
 
-// --- OpenRouter 调用辅助函数 ---
+// --- OpenRouter Fetch Helper ---
 async function callOpenRouter(
     settings: AppSettings | undefined,
     messages: { role: string, content: string }[],
-    jsonMode = false,
-    timeoutMs = STANDARD_TIMEOUT
+    jsonMode = false
 ): Promise<any> {
     const key = settings?.openRouterKey;
     if (!key) throw new Error("OpenRouter API Key missing");
@@ -79,7 +47,8 @@ async function callOpenRouter(
         })
     });
 
-    const response: any = await Promise.race([fetchPromise, timeoutPromise(timeoutMs)]);
+    // Increased timeout to 60s
+    const response: any = await Promise.race([fetchPromise, timeoutPromise(60000)]);
 
     if (!response.ok) {
         throw new Error(`OpenRouter Error: ${response.statusText}`);
@@ -90,6 +59,7 @@ async function callOpenRouter(
     return jsonMode ? safeJsonParse(content, {}) : content;
 }
 
+// --- Retry Helper ---
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 1, baseDelay = 1000): Promise<T> {
@@ -102,10 +72,11 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1, baseDelay = 1000)
       error?.message?.includes('429') || 
       error?.message?.includes('quota');
 
+    // Also retry on timeouts
     const isTimeout = error?.message === "Request timed out" || error?.message?.includes("timed out");
 
     if ((isRateLimit || isTimeout) && retries > 0) {
-      console.warn(`Operation failed. Retrying in ${baseDelay}ms...`, error);
+      console.warn(`Operation failed (Rate Limit or Timeout). Retrying in ${baseDelay}ms...`, error);
       await wait(baseDelay);
       return withRetry(fn, retries - 1, baseDelay * 2);
     }
@@ -113,11 +84,16 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1, baseDelay = 1000)
   }
 }
 
+/**
+ * Robust JSON Parser to prevent crashes (Black Screen Fix)
+ */
 const safeJsonParse = <T>(text: string, fallback: T): T => {
   if (!text) return fallback;
   try {
     let clean = text.trim();
+    // Remove markdown code blocks
     clean = clean.replace(/```json/g, '').replace(/```/g, '');
+    // Remove potential leading/trailing garbage
     const firstBrace = clean.indexOf('{');
     const lastBrace = clean.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1) {
@@ -130,6 +106,9 @@ const safeJsonParse = <T>(text: string, fallback: T): T => {
   }
 };
 
+/**
+ * Check and request Veo Key
+ */
 const ensureVeoKey = async () => {
   if (typeof window !== 'undefined' && (window as any).aistudio) {
      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
@@ -143,12 +122,20 @@ const ensureVeoKey = async () => {
   }
 };
 
+/**
+ * Generate Image Tool Implementation
+ */
 const generateImageTool = async (prompt: string, settings?: AppSettings) => {
     const ai = getClient(settings);
+    // Use flash-image for chat generation (fast)
     const response = await ai.models.generateContent({
         model: IMAGE_MODEL,
         contents: { parts: [{ text: prompt }] },
+        config: {
+             // Basic config
+        }
     });
+    
     const parts = response.candidates?.[0]?.content?.parts;
     if (parts && parts[0]?.inlineData?.data) {
         return `data:${parts[0].inlineData.mimeType};base64,${parts[0].inlineData.data}`;
@@ -156,29 +143,52 @@ const generateImageTool = async (prompt: string, settings?: AppSettings) => {
     throw new Error("Failed to generate image.");
 };
 
+/**
+ * Generate Video Tool Implementation
+ */
 const generateVideoTool = async (prompt: string, settings?: AppSettings) => {
+    // Check key for Veo
     await ensureVeoKey();
+    
+    // We MUST create a new client instance after key selection potentially happened
+    // However, the key is injected into process.env.API_KEY by the window.aistudio mechanism if selected
+    // But getClient uses settings.apiKey or process.env.API_KEY.
+    // If user selects a key via aistudio, it usually overrides the environment or we need to rely on it.
+    // For simplicity, we trust getClient will pick up the right key if we pass settings,
+    // OR if the user used the UI selector, process.env.API_KEY is populated.
     const ai = getClient(settings);
+
     let operation = await ai.models.generateVideos({
         model: VIDEO_MODEL,
         prompt: prompt,
-        config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
+        config: {
+            numberOfVideos: 1,
+            resolution: '720p',
+            aspectRatio: '16:9'
+        }
     });
+
+    // Poll for completion
     let attempts = 0;
-    while (!operation.done && attempts < 60) {
-        await wait(5000);
+    while (!operation.done && attempts < 60) { // Max 5 mins
+        await wait(5000); // Poll every 5 seconds
         operation = await ai.operations.getVideosOperation({ operation: operation });
         attempts++;
     }
+
     const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!videoUri) throw new Error("Video generation failed or returned no URI");
+
+    // Fetch the video data using the API Key to display it
     const apiKey = getGeminiKey(settings);
     const fetchUrl = `${videoUri}&key=${apiKey}`;
+    
     const res = await fetch(fetchUrl);
     const blob = await res.blob();
     return URL.createObjectURL(blob);
 };
 
+// --- CHAT TOOLS DEFINITION ---
 const chatTools: Tool[] = [
   {
     functionDeclarations: [
@@ -187,7 +197,12 @@ const chatTools: Tool[] = [
         description: "Generates an image/picture/photo based on the user's description.",
         parameters: {
           type: Type.OBJECT,
-          properties: { prompt: { type: Type.STRING, description: "Description." } },
+          properties: {
+            prompt: {
+              type: Type.STRING,
+              description: "The detailed description of the image to generate."
+            }
+          },
           required: ["prompt"]
         }
       },
@@ -196,7 +211,12 @@ const chatTools: Tool[] = [
         description: "Generates a short video/clip based on the user's description. Note: This takes time.",
         parameters: {
           type: Type.OBJECT,
-          properties: { prompt: { type: Type.STRING, description: "Description." } },
+          properties: {
+            prompt: {
+              type: Type.STRING,
+              description: "The detailed description of the video to generate."
+            }
+          },
           required: ["prompt"]
         }
       }
@@ -204,227 +224,537 @@ const chatTools: Tool[] = [
   }
 ];
 
-export const chatWithCharacter = async (character: GlobalCharacter, history: ChatMessage[], userMessage: string, settings?: AppSettings): Promise<{ text: string, mediaUrl?: string, mediaType?: 'image' | 'video' }> => {
+
+/**
+ * Chat with a Character (Companion Mode) with memory and TOOLS.
+ */
+export const chatWithCharacter = async (
+    character: GlobalCharacter, 
+    history: ChatMessage[], 
+    userMessage: string,
+    settings?: AppSettings
+): Promise<{ text: string, mediaUrl?: string, mediaType?: 'image' | 'video' }> => {
+    // Tool calling logic only supported via Google Gen AI directly right now for this implementation
+    // If OpenRouter is selected, we fall back to text only or need complex handling.
+    // For this update, if OpenRouter is active, we just do text.
     if (settings?.activeProvider === 'OPENROUTER') {
-        const text = await callOpenRouter(settings, [{ role: "system", content: `Roleplay as ${character.name}.` }, { role: "user", content: userMessage }]);
+        const text = await callOpenRouter(settings, [
+             { role: "system", content: `Roleplay as ${character.name}. ${character.personality}` },
+             { role: "user", content: userMessage }
+        ]);
         return { text };
     }
+
     return withRetry(async () => {
-        const recentHistory = history.slice(-15).map(m => `${m.role === 'user' ? 'User' : character.name}: ${m.content}`).join('\n');
-        const memoriesContext = (character.memories && character.memories.length > 0) ? `LONG-TERM MEMORIES:\n${character.memories.join('\n')}` : "";
-        const systemPrompt = `You are roleplaying as ${character.name}. Traits: ${character.gender}, ${character.age}. Personality: ${character.personality}. Style: ${character.speakingStyle}. ${memoriesContext}. Respond naturally.`;
+        // Limit history for context window but include memories
+        const recentHistory = history.slice(-15).map(m => {
+            const roleLabel = m.role === 'user' ? 'User' : character.name;
+            return `${roleLabel}: ${m.content}`;
+        }).join('\n');
+        
+        const memoriesContext = (character.memories && character.memories.length > 0) 
+            ? `LONG-TERM MEMORIES/FACTS:\n${character.memories.join('\n')}` 
+            : "";
+
+        const systemPrompt = `
+        You are roleplaying as ${character.name}.
+        Traits: ${character.gender}, ${character.age}.
+        Personality: ${character.personality}
+        Speaking Style: ${character.speakingStyle}
+        
+        ${memoriesContext}
+        
+        CAPABILITIES:
+        - You can generate images if the user asks for a picture, photo, or drawing. Use the 'generate_image' tool.
+        - You can generate short videos if the user asks for a video or clip. Use the 'generate_video' tool.
+        
+        Context: You are chatting with a user. Use your memories to make the conversation deep and personal.
+        Respond naturally in character. Do not break character.
+        Recent History:
+        ${recentHistory}
+        `;
+
         const ai = getClient(settings);
         const response = await ai.models.generateContent({
             model: TEXT_MODEL,
             contents: `User says: "${userMessage}"`,
-            config: { systemInstruction: systemPrompt, tools: chatTools }
+            config: {
+                systemInstruction: systemPrompt,
+                tools: chatTools
+            }
         });
+
+        // Check for function calls
         const functionCalls = response.functionCalls;
         if (functionCalls && functionCalls.length > 0) {
             const call = functionCalls[0];
             const prompt = (call.args as any).prompt;
+            
             if (call.name === "generate_image") {
-                const url = await generateImageTool(prompt, settings);
-                return { text: `(Generated image: ${prompt})`, mediaUrl: url, mediaType: 'image' };
+                try {
+                    const url = await generateImageTool(prompt, settings);
+                    return { 
+                        text: `(Generated an image of: ${prompt})`, 
+                        mediaUrl: url, 
+                        mediaType: 'image' 
+                    };
+                } catch (e) {
+                    return { text: `[I tried to paint that for you, but something went wrong: ${e instanceof Error ? e.message : 'Unknown error'}]` };
+                }
             }
+            
             if (call.name === "generate_video") {
-                const url = await generateVideoTool(prompt, settings);
-                return { text: `(Generated video: ${prompt})`, mediaUrl: url, mediaType: 'video' };
+                try {
+                    const url = await generateVideoTool(prompt, settings);
+                    return { 
+                        text: `(Generated a video of: ${prompt})`, 
+                        mediaUrl: url, 
+                        mediaType: 'video' 
+                    };
+                } catch (e) {
+                     return { text: `[I tried to film that for you, but something went wrong: ${e instanceof Error ? e.message : 'Unknown error'}]` };
+                }
             }
         }
+
         return { text: response.text || "..." };
     });
 };
 
-export const evolveCharacterFromChat = async (character: GlobalCharacter, recentMessages: ChatMessage[], settings?: AppSettings): Promise<{ newPersonality: string, newSpeakingStyle: string, memory: string }> => {
+/**
+ * Evolves Character based on recent chat (Memory & Optimization).
+ */
+export const evolveCharacterFromChat = async (
+    character: GlobalCharacter,
+    recentMessages: ChatMessage[],
+    settings?: AppSettings
+): Promise<{ newPersonality: string, newSpeakingStyle: string, memory: string }> => {
     return withRetry(async () => {
+        // Only analyze the last session (up to 20 messages)
         const transcript = recentMessages.slice(-20).map(m => `${m.role}: ${m.content}`).join("\n");
-        const prompt = `Analyze chat between User and ${character.name} (${character.personality}). 1. Summarize 1 key fact as "Memory". 2. Refine "Personality". 3. Refine "Speaking Style". Simplified Chinese. JSON: { memory, newPersonality, newSpeakingStyle }. Transcript: ${transcript}`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({
-            model: TEXT_MODEL, contents: prompt,
-            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { memory: { type: Type.STRING }, newPersonality: { type: Type.STRING }, newSpeakingStyle: { type: Type.STRING } } } }
-        });
-        const data = safeJsonParse<{ memory?: string; newPersonality?: string; newSpeakingStyle?: string }>(response.text || "{}", {});
-        return { newPersonality: data.newPersonality || character.personality, newSpeakingStyle: data.newSpeakingStyle || character.speakingStyle, memory: data.memory || "" };
-    });
-};
-
-// --- NEW: Step 1 - Initialize Basic Script Info ---
-export const generateScriptBasic = async (prompt: string, characters: GlobalCharacter[], lang: Language = 'zh-CN', settings?: AppSettings): Promise<{ title: string, setting: string }> => {
-    return withRetry(async () => {
-        const charNames = characters.map(c => c.name).join(", ");
-        const promptText = `
-            Context: A user wants to create a story featuring characters: [${charNames}].
-            User Idea: "${prompt}"
-            
-            Task:
-            1. Create a Creative Title.
-            2. Describe the Setting (Time/Place/Atmosphere).
-            
-            Do NOT generate plot points yet.
-            Respond in Simplified Chinese.
-            JSON: { "title": "string", "setting": "string" }
-        `;
         
-        if (settings?.activeProvider === 'OPENROUTER') {
-             const data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
-             return { title: data.title || "Untitled", setting: data.setting || "Unknown" };
-        } else {
-            const ai = getClient(settings);
-            const response = await ai.models.generateContent({
-                model: TEXT_MODEL, contents: promptText,
-                config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, setting: { type: Type.STRING } } } }
-            });
-            const data = safeJsonParse<{ title?: string; setting?: string }>(response.text || "{}", {});
-            return { title: data.title || "Untitled", setting: data.setting || "Unknown" };
-        }
-    });
-}
+        const prompt = `
+            Analyze this chat transcript between User and Character (${character.name}).
+            Current Personality: ${character.personality}
+            Current Style: ${character.speakingStyle}
 
-// --- NEW: Step 2 - Generate Next Plot Segment ---
-export const generateNextPlotSegment = async (script: Script, settings?: AppSettings): Promise<string> => {
-    return withRetry(async () => {
-        const existingPoints = script.plotPoints.map((p, i) => `${i+1}. ${p}`).join("\n");
-        const promptText = `
-            Title: ${script.title}
-            Setting: ${script.setting}
-            Premise: ${script.premise}
-            Characters: ${script.characters.map(c => c.name).join(', ')}
+            Tasks:
+            1. Summarize 1 key fact or shared experience from this chat as a "Memory" (1 sentence). If nothing important happened, return empty string.
+            2. Refine the Character's "Personality" to be more specific based on how they acted or what they learned.
+            3. Refine the "Speaking Style" if they adopted any new mannerisms or catchphrases.
             
-            Current Plot Outline:
-            ${existingPoints}
-            
-            Task: Generate the NEXT logical scene/chapter outline (1 sentence).
-            Ensure it moves the story forward meaningfully.
-            Respond in Simplified Chinese.
-            Return ONLY the string of the next plot point.
+            IMPORTANT: Output in Simplified Chinese (简体中文).
+
+            Return JSON:
+            {
+                "memory": "string (or empty)",
+                "newPersonality": "string (refined)",
+                "newSpeakingStyle": "string (refined)"
+            }
+            Transcript:
+            ${transcript}
         `;
 
+        let data;
         if (settings?.activeProvider === 'OPENROUTER') {
-            return await callOpenRouter(settings, [{ role: "user", content: promptText }]);
+             data = await callOpenRouter(settings, [{ role: "user", content: prompt }], true);
         } else {
             const ai = getClient(settings);
-            const response = await ai.models.generateContent({ model: TEXT_MODEL, contents: promptText });
-            return response.text?.trim() || "Next Scene";
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: TEXT_MODEL,
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                memory: { type: Type.STRING },
+                                newPersonality: { type: Type.STRING },
+                                newSpeakingStyle: { type: Type.STRING }
+                            }
+                        }
+                    }
+                }),
+                timeoutPromise(30000) // Increased to 30s
+            ]) as any;
+            data = safeJsonParse(response.text || "{}", {});
         }
-    });
-};
 
-
-export const completeCharacterProfile = async (partialChar: Partial<GlobalCharacter>, settings?: AppSettings): Promise<Partial<GlobalCharacter>> => {
-    return withRetry(async () => {
-        const prompt = `User Input Name: "${partialChar.name}". Analyze name. Is it famous? Match persona. Focus on Personality/Speaking Style. Visual brief. Role/Occupation. Simplified Chinese. JSON: {name, gender, age, personality, speakingStyle, visualDescription, role}.`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({
-            model: TEXT_MODEL, contents: prompt,
-            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, gender: { type: Type.STRING }, age: { type: Type.STRING }, personality: { type: Type.STRING }, speakingStyle: { type: Type.STRING }, visualDescription: { type: Type.STRING }, role: { type: Type.STRING } } } }
-        });
-        const data = safeJsonParse<any>(response.text || "{}", {});
-        return { ...partialChar, ...data };
-    });
-};
-
-export const generateSingleCharacter = async (script: Script, settings?: AppSettings): Promise<Character> => {
-    return withRetry(async () => {
-        const promptText = `Context: ${script.title}. Characters: ${script.characters.map(c => c.name).join(', ')}. Create ONE new unique character. Simplified Chinese. JSON: { name, role, personality, speakingStyle, visualDescription }.`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({
-            model: TEXT_MODEL, contents: promptText,
-            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, role: { type: Type.STRING }, personality: { type: Type.STRING }, speakingStyle: { type: Type.STRING }, visualDescription: { type: Type.STRING } } } }
-        });
-        const data = safeJsonParse<{ name?: string; role?: string; personality?: string; speakingStyle?: string; visualDescription?: string }>(response.text || "{}", {});
-        return { 
-          id: generateId(), 
-          name: data.name || "Unknown", 
-          role: data.role || "Character", 
-          personality: data.personality || "Standard", 
-          speakingStyle: data.speakingStyle || "Normal", 
-          visualDescription: data.visualDescription || "Standard", 
-          isUserControlled: false 
+        return {
+            newPersonality: data.newPersonality || character.personality,
+            newSpeakingStyle: data.newSpeakingStyle || character.speakingStyle,
+            memory: data.memory || ""
         };
     });
 };
 
-export const regenerateFuturePlot = async (script: Script, directorCommand: string, settings?: AppSettings): Promise<string[]> => {
+/**
+ * Generates the initial script structure with richer plots, incorporating Pre-Defined Characters.
+ */
+export const generateScriptBlueprint = async (
+    prompt: string, 
+    predefinedCharacters: GlobalCharacter[] = [],
+    lang: Language = 'zh-CN', 
+    settings?: AppSettings
+): Promise<Partial<Script>> => {
+  return withRetry(async () => {
+    const langInstruction = lang === 'zh-CN' ? "Respond entirely in Simplified Chinese." : "Respond in English.";
+    
+    let charContext = "";
+    if (predefinedCharacters.length > 0) {
+        charContext = `
+        MUST INCLUDE THESE EXISTING CHARACTERS IN THE CAST:
+        ${predefinedCharacters.map(c => `- Name: ${c.name} (${c.gender}, ${c.age}). Personality: ${c.personality}. Visual: ${c.visualDescription}`).join('\n')}
+        
+        Assign them appropriate Roles in the story. You may add other characters if needed.
+        `;
+    }
+
+    const systemInstruction = `
+      You are a world-class screenwriter.
+      Create a detailed script scenario based on the prompt: "${prompt}".
+      1. Plot Points must be sequential and causal.
+      2. Characters must have conflicting goals.
+      ${charContext}
+      ${langInstruction}
+    `;
+
+    // Strategy Pattern: Check Provider
+    if (settings?.activeProvider === 'OPENROUTER') {
+        const jsonSchemaDesc = `
+        Return valid JSON with this structure:
+        {
+            "title": "string",
+            "premise": "string",
+            "setting": "string",
+            "plotPoints": ["string"],
+            "possibleEndings": ["string"],
+            "characters": [{ "name": "string", "role": "string", "personality": "string", "speakingStyle": "string", "visualDescription": "string" }]
+        }
+        `;
+        const data = await callOpenRouter(settings, [
+            { role: "system", content: systemInstruction + jsonSchemaDesc },
+            { role: "user", content: `Create a script scenario.` }
+        ], true);
+        
+        return processScriptData(data, prompt, predefinedCharacters);
+    }
+
+    // Default: Gemini
+    const ai = getClient(settings);
+    const response = await Promise.race([
+        ai.models.generateContent({
+            model: TEXT_MODEL,
+            contents: `Create a script scenario.`,
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING },
+                    premise: { type: Type.STRING },
+                    setting: { type: Type.STRING },
+                    plotPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    possibleEndings: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    characters: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                        name: { type: Type.STRING },
+                        role: { type: Type.STRING },
+                        personality: { type: Type.STRING },
+                        speakingStyle: { type: Type.STRING },
+                        visualDescription: { type: Type.STRING },
+                        },
+                        required: ["name", "role", "personality", "speakingStyle", "visualDescription"]
+                    }
+                    }
+                }
+                }
+            }
+        }),
+        timeoutPromise(60000) // Increased to 60s
+    ]) as any;
+
+    const data = safeJsonParse(response.text || "{}", {});
+    return processScriptData(data, prompt, predefinedCharacters);
+  });
+};
+
+// Helper to normalize script data from any provider
+const processScriptData = (data: any, originalPrompt: string, preDefinedChars: GlobalCharacter[]) => {
+    // Map generated characters to existing globals if names match (fuzzy match)
+    const characters = (data.characters || []).map((c: any) => {
+        // Check if this generated char matches a predefined global char
+        const match = preDefinedChars.find(pc => pc.name.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(pc.name.toLowerCase()));
+        
+        if (match) {
+            return {
+                id: crypto.randomUUID(),
+                name: match.name, // Enforce global name
+                role: c.role,
+                personality: match.personality, // Enforce global personality
+                speakingStyle: match.speakingStyle,
+                visualDescription: match.visualDescription,
+                avatarUrl: match.avatarUrl,
+                isUserControlled: false,
+                isGlobal: true,
+                globalId: match.id,
+                gender: match.gender,
+                age: match.age
+            };
+        }
+
+        return {
+            id: crypto.randomUUID(),
+            name: c.name || "Unknown",
+            role: c.role || "Extra",
+            personality: c.personality || "Neutral",
+            speakingStyle: c.speakingStyle || "Normal",
+            visualDescription: c.visualDescription || "A person",
+            isUserControlled: false,
+        };
+    });
+
+    return {
+      title: data.title || "Untitled",
+      premise: data.premise || originalPrompt,
+      setting: data.setting || "",
+      plotPoints: Array.isArray(data.plotPoints) ? data.plotPoints : [],
+      possibleEndings: Array.isArray(data.possibleEndings) ? data.possibleEndings : [],
+      characters: characters,
+      history: [],
+      currentPlotIndex: 0,
+      lastUpdated: Date.now()
+    };
+};
+
+/**
+ * Completes a Global Character Profile based on partial input.
+ * Specialized for "Name-First" creation.
+ * Updated: Focuses primarily on Personality and Speaking Style.
+ */
+export const completeCharacterProfile = async (partialChar: Partial<GlobalCharacter>, settings?: AppSettings): Promise<Partial<GlobalCharacter>> => {
     return withRetry(async () => {
-        const promptText = `Title: ${script.title}. Event: Director said "${directorCommand}". Rewrite remaining plot points. Simplified Chinese. JSON: { newPlotPoints: [] }`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({
-            model: TEXT_MODEL, contents: promptText,
-            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { newPlotPoints: { type: Type.ARRAY, items: { type: Type.STRING } } } } }
-        });
-        const data = safeJsonParse<{ newPlotPoints?: string[] }>(response.text || "{}", {});
+        const prompt = `
+            You are an expert character designer.
+            
+            USER INPUT NAME: "${partialChar.name || "Unknown"}"
+            USER INPUT CONTEXT: ${JSON.stringify(partialChar)}
+
+            TASK:
+            1. Analyze the name. Is it a specific famous character?
+               - YES: Match their canonical personality and speech exactly.
+               - NO: Create a creative original character.
+            2. FOCUS HEAVILY on "personality" and "speakingStyle".
+               - Personality: Detailed psychological traits.
+               - Speaking Style: Specific tone, catchphrases, sentence structure (e.g., formal, slang, poetic).
+            3. "visualDescription": Keep it brief (appearance only). Do NOT write it as an image prompt.
+
+            CRITICAL: All generated text content MUST be in Simplified Chinese (简体中文).
+
+            Return JSON with keys: name, gender, age, personality, speakingStyle, visualDescription.
+        `;
+        
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+            data = await callOpenRouter(settings, [{ role: "user", content: prompt }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await Promise.race([
+                ai.models.generateContent({
+                    model: TEXT_MODEL,
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                name: { type: Type.STRING },
+                                gender: { type: Type.STRING },
+                                age: { type: Type.STRING },
+                                personality: { type: Type.STRING },
+                                speakingStyle: { type: Type.STRING },
+                                visualDescription: { type: Type.STRING }
+                            }
+                        }
+                    }
+                }),
+                timeoutPromise(30000) // Increased to 30s
+            ]) as any;
+            data = safeJsonParse(response.text || "{}", {});
+        }
+        
+        return {
+            ...partialChar,
+            name: data.name || partialChar.name,
+            gender: data.gender || partialChar.gender,
+            age: data.age || partialChar.age,
+            personality: data.personality || partialChar.personality,
+            speakingStyle: data.speakingStyle || partialChar.speakingStyle,
+            visualDescription: data.visualDescription || partialChar.visualDescription
+        };
+    });
+};
+
+/**
+ * Generates a single new character that fits the script.
+ */
+export const generateSingleCharacter = async (script: Script, settings?: AppSettings): Promise<Character> => {
+    return withRetry(async () => {
+        const promptText = `
+            Context: ${script.title}. ${script.premise}.
+            Existing Characters: ${script.characters.map(c => c.name).join(', ')}.
+            Task: Create ONE new unique character that adds conflict or comedy to this group.
+            IMPORTANT: Respond in Simplified Chinese (简体中文).
+            Return JSON only with keys: name, role, personality, speakingStyle, visualDescription.
+        `;
+
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+            data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: promptText,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            role: { type: Type.STRING },
+                            personality: { type: Type.STRING },
+                            speakingStyle: { type: Type.STRING },
+                            visualDescription: { type: Type.STRING }
+                        }
+                    }
+                }
+            });
+            data = safeJsonParse(response.text || "{}", {});
+        }
+
+        const fallback = { name: "New Character", role: "Mystery", personality: "Unknown", speakingStyle: "Quiet", visualDescription: "Blurry" };
+        const finalData = { ...fallback, ...data };
+
+        return {
+            id: crypto.randomUUID(),
+            name: finalData.name,
+            role: finalData.role,
+            personality: finalData.personality,
+            speakingStyle: finalData.speakingStyle,
+            visualDescription: finalData.visualDescription,
+            isUserControlled: false
+        };
+    });
+};
+
+/**
+ * RECONSTRUCTS the future plot based on a Director Command (God Mode).
+ */
+export const regenerateFuturePlot = async (
+    script: Script, 
+    directorCommand: string, 
+    settings?: AppSettings
+): Promise<string[]> => {
+    return withRetry(async () => {
+        const historySummary = script.history.slice(-10).map(h => h.content).join(" ");
+        const promptText = `
+            Title: ${script.title}
+            Current Plot Plan: ${JSON.stringify(script.plotPoints)}
+            Recent Events: ${historySummary}
+            EVENT: The Director (God) has intervened with this command: "${directorCommand}".
+            TASK: Rewrite the remaining plot points to logically follow this new event. 
+            The story must change direction based on this intervention.
+            IMPORTANT: Respond in Simplified Chinese (简体中文).
+            Return a JSON object with property "newPlotPoints" (array of strings).
+        `;
+
+        let data;
+        if (settings?.activeProvider === 'OPENROUTER') {
+            data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+        } else {
+            const ai = getClient(settings);
+            const response = await ai.models.generateContent({
+                model: TEXT_MODEL,
+                contents: promptText,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            newPlotPoints: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        }
+                    }
+                }
+            });
+            data = safeJsonParse(response.text || "{}", {});
+        }
+
         return data.newPlotPoints || script.plotPoints;
     });
 };
 
-export const generateNextChapterPlan = async (script: Script, upcomingPlotPoint: string, settings?: AppSettings): Promise<string> => {
-    return withRetry(async () => {
-        const promptText = `Title: ${script.title}. Original Next Chapter: "${upcomingPlotPoint}". Propose a refined goal. Simplified Chinese. Return String.`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({ model: TEXT_MODEL, contents: promptText });
-        return response.text?.trim() || upcomingPlotPoint;
-    });
-};
+/**
+ * Refines text (Standard).
+ */
+export const refineText = async (
+  currentText: string, 
+  fieldType: string, 
+  scriptContext: Script, 
+  lang: Language = 'zh-CN',
+  settings?: AppSettings
+): Promise<string> => {
+  return withRetry(async () => {
+    const langInstruction = lang === 'zh-CN' ? "Respond in Simplified Chinese." : "Respond in English.";
+    const promptText = `
+      Context: ${scriptContext.title}.
+      Task: Improve this "${fieldType}" to be more dramatic and concise.
+      Text: "${currentText}"
+      ${langInstruction}
+      Return ONLY the refined text string.
+    `;
 
-export const autoCompleteStory = async (script: Script, settings?: AppSettings): Promise<Message[]> => {
-    return withRetry(async () => {
-        const promptText = `Title: ${script.title}. Remaining Chapters: ${JSON.stringify(script.plotPoints.slice(script.currentPlotIndex))}. Generate narration for EACH to finish story. Simplified Chinese. JSON: { narrations: [] }`;
+    if (settings?.activeProvider === 'OPENROUTER') {
+        return await callOpenRouter(settings, [{ role: "user", content: promptText }]);
+    } else {
         const ai = getClient(settings);
         const response = await ai.models.generateContent({
-            model: TEXT_MODEL, contents: promptText,
-            config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { narrations: { type: Type.ARRAY, items: { type: Type.STRING } } } } }
+            model: TEXT_MODEL,
+            contents: promptText
         });
-        const data = safeJsonParse<{ narrations?: string[] }>(response.text || "{}", {});
-        return (data.narrations || []).map((content: string) => ({ id: generateId(), characterId: 'narrator', type: 'narration', content, timestamp: Date.now() }));
-    });
-};
-
-export const generateNovelVersion = async (script: Script, style: NovelStyle, settings?: AppSettings): Promise<string> => {
-    return withRetry(async () => {
-        const fullHistory = script.history.map(h => {
-            const charName = script.characters.find(c => c.id === h.characterId)?.name || "Narrator";
-            return `${charName}: ${h.content}`;
-        }).join("\n");
-        const promptText = `Write a novel chapter based on this script history. Style: ${style}. Simplified Chinese. History: ${fullHistory}`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({ model: TEXT_MODEL, contents: promptText });
-        return response.text || "Failed to generate novel.";
-    });
-};
-
-export const refineText = async (currentText: string, fieldType: string, scriptContext: Script, lang: Language = 'zh-CN', settings?: AppSettings): Promise<string> => {
-    return withRetry(async () => {
-        const promptText = `Improve this "${fieldType}": "${currentText}". Context: ${scriptContext.title}. Simplified Chinese. Return String.`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({ model: TEXT_MODEL, contents: promptText });
         return response.text?.trim() || currentText;
-    });
+    }
+  });
 };
 
-export const refineCharacterTrait = async (currentText: string, characterName: string, traitType: string, lang: Language = 'zh-CN', settings?: AppSettings): Promise<string> => {
-    return withRetry(async () => {
-        const promptText = `Character: ${characterName}. Improve "${traitType}": "${currentText}". Deep, psychological. Simplified Chinese. Return String.`;
-        const ai = getClient(settings);
-        const response = await ai.models.generateContent({ model: TEXT_MODEL, contents: promptText });
-        return response.text?.trim() || currentText;
-    });
-}
-
-// --- UPDATED: Generate Next Beat (Prioritize Plot) ---
-export const generateNextBeat = async (script: Script, forcedDirectorCommand: string | null, targetPlotPoint: string | null, lang: Language = 'zh-CN', settings?: AppSettings): Promise<{ characterId: string; content: string; type: 'dialogue' | 'action' | 'narration' }> => {
+/**
+ * Determines the next turn in the story.
+ * OPTIMIZED: Reduced context window and simplified instructions for speed.
+ */
+export const generateNextBeat = async (
+    script: Script, 
+    forcedDirectorCommand: string | null,
+    targetPlotPoint: string | null,
+    lang: Language = 'zh-CN',
+    settings?: AppSettings
+): Promise<{ characterId: string; content: string; type: 'dialogue' | 'action' | 'narration' }> => {
   return withRetry(async () => {
+    const langInstruction = lang === 'zh-CN' ? "Language: Simplified Chinese." : "Language: English.";
+    
+    // Optimization: Only last 10 messages for context speed
     const recentHistory = script.history.slice(-10);
     const historyText = recentHistory.map(m => {
       const charName = script.characters.find(c => c.id === m.characterId)?.name || "Narrator";
       return `${charName} [${m.type}]: ${m.content}`;
     }).join("\n");
 
-    // CRITICAL FIX: Safe access to character properties using optional chaining and default empty strings
-    // This prevents crashes if incomplete character data is passed
     const characterProfiles = script.characters.map(c => 
-      `${c.name}: ${(c.personality || "").substring(0, 50)}... Style: ${(c.speakingStyle || "").substring(0,50)}...`
+      `${c.name} (${c.role}): ${c.personality.substring(0, 50)}...`
     ).join("\n");
 
     let promptContext = "";
@@ -432,69 +762,103 @@ export const generateNextBeat = async (script: Script, forcedDirectorCommand: st
         promptContext = `DIRECTOR COMMAND: "${forcedDirectorCommand}". React immediately.`;
     } else {
         const currentGoal = targetPlotPoint || "End";
-        // 关键 Prompt 修改：强调优先满足剧情
-        promptContext = `
-        CURRENT SCENE GOAL: "${currentGoal}".
-        CRITICAL INSTRUCTION: Move the story forward to achieve this goal. 
-        Characters must act according to their personality/style, BUT satisfying the plot goal is the PRIORITY.
-        Avoid empty chatter. Every line must serve the plot or character depth relative to the situation.
-        `;
+        promptContext = `Goal: "${currentGoal}". Move story forward.`;
     }
 
+    // Optimization: Shorter prompt
     const promptText = `
       Title: ${script.title}
       Chars: ${characterProfiles}
       History: ${historyText}
       ${promptContext}
-      Task: Generate ONE next beat (dialogue/action/narration).
-      Language: Simplified Chinese.
+      Task: Generate ONE next beat.
+      ${langInstruction}
       Return JSON: { "characterName": "...", "type": "dialogue|action|narration", "content": "..." }
     `;
 
-    const ai = getClient(settings);
-    const response = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: promptText,
-      config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { characterName: { type: Type.STRING }, type: { type: Type.STRING, enum: ["dialogue", "action", "narration"] }, content: { type: Type.STRING } } } }
-    });
-    const data = safeJsonParse(response.text || "{}", {});
+    let data;
+    if (settings?.activeProvider === 'OPENROUTER') {
+         data = await callOpenRouter(settings, [{ role: "user", content: promptText }], true);
+    } else {
+        const ai = getClient(settings);
+        const response = await ai.models.generateContent({
+          model: TEXT_MODEL,
+          contents: promptText,
+          config: {
+            responseMimeType: "application/json",
+            // Optimization: Remove strict schema definition if not strictly needed can speed up token generation sometimes, 
+            // but for reliability we keep it simple.
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                characterName: { type: Type.STRING },
+                type: { type: Type.STRING, enum: ["dialogue", "action", "narration"] },
+                content: { type: Type.STRING }
+              }
+            }
+          }
+        });
+        data = safeJsonParse(response.text || "{}", {});
+    }
 
     const fallback = { characterName: 'Narrator', type: 'narration', content: '...' };
     const finalData = { ...fallback, ...data };
 
     let charId = 'narrator';
-    if (finalData.characterName && finalData.characterName !== 'Narrator') {
-      // Fuzzy match safe check
-      const char = script.characters.find(c => c.name.includes(finalData.characterName) || finalData.characterName.includes(c.name));
+    if (finalData.characterName !== 'Narrator') {
+      const char = script.characters.find(c => c.name === finalData.characterName);
       if (char) charId = char.id;
     }
 
-    // Safety fallback if content is empty
-    const content = finalData.content || "...";
-    
-    return { characterId: charId, content: content, type: (finalData.type as any) || 'narration' };
+    return {
+      characterId: charId,
+      content: finalData.content || "...",
+      type: (finalData.type as any) || 'narration'
+    };
   });
 };
 
+/**
+ * Generates an avatar. 
+ */
 export const generateAvatarImage = async (character: Character | GlobalCharacter, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
+    // Always use Google Client for images (supports default key)
     const ai = getClient(settings); 
-    const prompt = `Portrait of ${character.name}, ${character.gender || ''}, ${character.age || ''}. ${character.visualDescription}. High quality avatar.`;
-    const response = await ai.models.generateContent({ model: IMAGE_MODEL, contents: { parts: [{ text: prompt }] } });
+    const prompt = `Portrait of ${character.name}, ${character.gender || ''}, ${character.age || ''}. ${character.visualDescription}. High quality, stylized avatar, headshot.`;
+    
+    const response = await ai.models.generateContent({
+      model: IMAGE_MODEL,
+      contents: { parts: [{ text: prompt }] }
+    });
+
     const parts = response.candidates?.[0]?.content?.parts;
-    if (parts && parts[0]?.inlineData?.data) return `data:${parts[0].inlineData.mimeType};base64,${parts[0].inlineData.data}`;
+    if (parts && parts[0]?.inlineData?.data) {
+        return `data:${parts[0].inlineData.mimeType};base64,${parts[0].inlineData.data}`;
+    }
     throw new Error("No image data");
   });
 };
 
+/**
+ * Generates a scene illustration.
+ */
 export const generateSceneImage = async (sceneDescription: string, scriptTitle: string, settings?: AppSettings): Promise<string> => {
   return withRetry(async () => {
+    // Always use Google Client for images
     const ai = getClient(settings);
     const desc = sceneDescription.length > 300 ? sceneDescription.substring(0, 300) : sceneDescription;
-    const prompt = `Cinematic shot, ${scriptTitle}, ${desc}. 4k, detailed.`;
-    const response = await ai.models.generateContent({ model: IMAGE_MODEL, contents: { parts: [{ text: prompt }] } });
+    const prompt = `Cinematic shot, ${scriptTitle}, ${desc}. 4k, detailed, atmospheric.`;
+
+    const response = await ai.models.generateContent({
+      model: IMAGE_MODEL,
+      contents: { parts: [{ text: prompt }] }
+    });
+
     const parts = response.candidates?.[0]?.content?.parts;
-    if (parts && parts[0]?.inlineData?.data) return `data:${parts[0].inlineData.mimeType};base64,${parts[0].inlineData.data}`;
+    if (parts && parts[0]?.inlineData?.data) {
+        return `data:${parts[0].inlineData.mimeType};base64,${parts[0].inlineData.data}`;
+    }
     throw new Error("No image data");
   });
 };

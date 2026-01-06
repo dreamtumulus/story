@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Play, Pause, Save, Settings, 
@@ -7,7 +8,7 @@ import {
   Wand2, RefreshCw, LayoutDashboard, Film, BookOpen, Crown, Clapperboard,
   LogOut, User as UserIcon, Key, X, AlertCircle, Loader2, Shuffle,
   Cloud, Zap, SkipForward, Upload, Heart, Smile, BrainCircuit, Video,
-  Filter
+  Filter, Atom
 } from 'lucide-react';
 import { Script, Character, Message, Language, Achievement, User, AppSettings, GlobalCharacter, ChatSession, ChatMessage } from './types';
 import { 
@@ -17,22 +18,22 @@ import {
 } from './services/aiService';
 import { authService } from './services/authService';
 
-// --- Character Text Colors (Pastel Palette) ---
+// --- Character Text Colors (Ethereal Soul Palette) ---
 const CHAR_COLORS = [
-    '#fca5a5', // red-300
-    '#86efac', // green-300
-    '#93c5fd', // blue-300
-    '#fcd34d', // amber-300
-    '#d8b4fe', // purple-300
-    '#f472b6', // pink-300
-    '#67e8f9', // cyan-300
-    '#cbd5e1', // slate-300
-    '#fdba74', // orange-300
-    '#a5b4fc', // indigo-300
+    '#c084fc', // purple-400
+    '#818cf8', // indigo-400
+    '#22d3ee', // cyan-400
+    '#fbbf24', // amber-400
+    '#f472b6', // pink-400
+    '#4ade80', // green-400
+    '#f87171', // red-400
+    '#a78bfa', // violet-400
+    '#38bdf8', // sky-400
+    '#fb923c', // orange-400
 ];
 
 const getCharacterColor = (charId: string) => {
-    if (charId === 'narrator') return '#fbbf24'; // Amber for narrator
+    if (charId === 'narrator') return '#fbbf24'; 
     let hash = 0;
     for (let i = 0; i < charId.length; i++) {
         hash = charId.charCodeAt(i) + ((hash << 5) - hash);
@@ -41,229 +42,253 @@ const getCharacterColor = (charId: string) => {
     return CHAR_COLORS[index];
 };
 
-// --- Logo Component ---
+// --- Logo Component (Redesigned for Elegance) ---
 const Logo = ({ className = "" }: { className?: string }) => (
-    <div className={`flex items-center gap-2 ${className}`}>
-        <div className="relative w-8 h-8 flex items-center justify-center">
-            <Cloud className="text-white w-8 h-8 drop-shadow-[0_0_10px_rgba(165,180,252,0.5)]" fill="currentColor" fillOpacity={0.2} strokeWidth={2.5} />
-            <Play size={10} className="absolute text-indigo-600 fill-indigo-600 ml-0.5" />
+    <div className={`flex items-center gap-4 ${className}`}>
+        <div className="relative w-12 h-12">
+            {/* Outer Ring */}
+            <svg className="absolute inset-0 w-full h-full animate-[spin_8s_linear_infinite] opacity-30" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45" fill="none" stroke="url(#logo-grad)" strokeWidth="0.5" strokeDasharray="1 4" />
+            </svg>
+            {/* Middle Ring */}
+            <svg className="absolute inset-0 w-full h-full animate-[spin_12s_linear_infinite_reverse] opacity-60" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="none" stroke="url(#logo-grad)" strokeWidth="1" strokeDasharray="10 15" />
+            </svg>
+            {/* Center Soul Point */}
+            <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-2.5 h-2.5 bg-white rounded-full shadow-[0_0_15px_#fff] animate-pulse"></div>
+            </div>
+            {/* Gradient Definitions */}
+            <svg className="absolute w-0 h-0">
+                <defs>
+                    <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#818cf8" />
+                        <stop offset="100%" stopColor="#c084fc" />
+                    </linearGradient>
+                </defs>
+            </svg>
         </div>
-        <span className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 to-white tracking-tight">Daydreaming</span>
+        <div className="flex flex-col">
+            <h1 className="text-2xl font-display font-black tracking-tight text-white leading-none">
+                伊莫拉<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">星球</span>
+            </h1>
+            <span className="text-[9px] font-mono font-bold tracking-[0.4em] uppercase text-indigo-400/60 mt-1">Planet Imola</span>
+        </div>
     </div>
 );
 
 // --- i18n Dictionary ---
 const TRANSLATIONS = {
   'zh-CN': {
-    title: "Daydreaming",
-    subtitle: "白日梦剧场",
-    heroTitle: "白日梦 · 触手可及",
-    heroSubtitle: "你的每一次奇思妙想，都是一场即将上演的精彩大戏。AI 导演已就位。",
-    dashboard: "剧场大厅",
-    myScripts: "我的梦境",
-    templates: "灵感库",
-    characters: "角色库",
-    community: "社区",
-    achievements: "成就",
-    settings: "设置",
-    startNew: "开始做梦",
-    dreaming: "正在编织梦境...",
-    create: "生成剧本",
-    placeholder: "例如：三个时间旅行者在史前时代的茶话会...",
-    noScripts: "还没有梦境。在上方输入灵感，开始你的第一场白日梦。",
-    setup: "第一幕：梦境构筑",
-    castSetup: "第二幕：角色入梦",
-    startShow: "大幕拉开",
-    premise: "故事梗概",
-    plotPoints: "关键节点",
-    endings: "可能的结局",
-    cast: "演员表",
-    addActor: "手动添加",
-    aiAddActor: "AI 创造角色",
-    importActor: "从角色库导入",
-    genLook: "生成形象",
-    playerControlled: "玩家扮演",
-    observerMode: "观察者模式",
-    resumeAuto: "恢复自动播放",
-    speakingAs: "正在扮演",
-    whatSay: "请输入台词或动作...",
-    onAir: "直播中",
-    paused: "已暂停",
-    exit: "退出",
-    liveStage: "演出现场",
-    useTemplate: "使用模版",
-    createTemplate: "新建模版",
-    publish: "发布到社区",
-    author: "作者",
-    downloads: "下载",
-    likes: "点赞",
-    unlocked: "解锁成就！",
-    templateMode: "模版编辑模式",
-    next: "下一步",
-    back: "上一步",
-    name: "姓名",
-    gender: "性别",
-    age: "年龄",
-    role: "角色/职业",
-    personality: "性格特征",
-    speakingStyle: "语言风格",
-    visual: "外貌描述 (可选)",
-    yourCue: "轮到你表演了",
-    directorNote: "导演提示：请根据角色性格输入对话",
-    aiComplete: "AI 自动刻画",
-    directorMode: "上帝指令",
-    directorPlaceholder: "输入指令，如：'突然停电了' (AI将重构剧情)",
-    inject: "注入指令",
-    saving: "已保存",
+    title: "伊莫拉星球",
+    subtitle: "灵魂回响枢纽",
+    heroTitle: "唤醒亿万灵魂的余温",
+    heroSubtitle: "在平行宇宙的伊莫拉，人类从诞生起的所有灵魂皆沉睡于此。你是引导者，负责建立灵魂链接，让文明的记忆在现实中重燃回响。",
+    dashboard: "回响大厅",
+    myScripts: "命运织卷",
+    templates: "记忆模版",
+    characters: "灵魂矩阵",
+    community: "众生星域",
+    achievements: "灵格晋升",
+    settings: "系统同步",
+    startNew: "建立链接",
+    dreaming: "正在编织灵魂轨迹...",
+    create: "开启链接",
+    placeholder: "输入灵魂契约，例如：一位流浪诗人与古老文明的最后对话...",
+    noScripts: "尚未建立灵魂链接。在上方输入契约，开启一段跨越时空的记忆。",
+    setup: "第一章：时空锚定",
+    castSetup: "第二章：灵魂链接",
+    startShow: "链接生效",
+    premise: "因缘梗概",
+    plotPoints: "因果节点",
+    endings: "命运终局",
+    cast: "灵魂图谱",
+    addActor: "建立链接",
+    aiAddActor: "AI 探寻灵魂",
+    importActor: "从矩阵导入",
+    genLook: "凝练形体",
+    playerControlled: "意识降临",
+    observerMode: "静默观测",
+    resumeAuto: "恢复时空流转",
+    speakingAs: "正在联接",
+    whatSay: "传递意识指令...",
+    onAir: "同步中",
+    paused: "静止",
+    exit: "切断联接",
+    liveStage: "时空回响",
+    useTemplate: "映射模版",
+    createTemplate: "封存记忆",
+    publish: "归于星域",
+    author: "引导者",
+    downloads: "映射数",
+    likes: "共鸣数",
+    unlocked: "灵格突破！",
+    templateMode: "模版编辑",
+    next: "溯流而下",
+    back: "溯流而上",
+    name: "真名",
+    gender: "属性",
+    age: "纪元",
+    role: "宿命/职能",
+    personality: "灵魂特质",
+    speakingStyle: "语素风格",
+    visual: "形体显现 (可选)",
+    yourCue: "意识降临时间",
+    directorNote: "系统提示：请遵循灵魂特质引导叙事",
+    aiComplete: "AI 灵性刻画",
+    directorMode: "造物主指令",
+    directorPlaceholder: "输入神谕，例如：'极夜降临' (灵魂轨迹将重组)",
+    inject: "降下神谕",
+    saving: "已锚定",
     continue: "继续",
-    quickStart: "快速开始",
-    loginTitle: "Daydreaming",
-    loginSubtitle: "登录以保存您的梦境",
-    loginBtn: "登录",
-    regBtn: "注册",
-    welcome: "欢迎回来",
-    apiKeyHint: "内置 Key 已启用。如有需要，可配置自定义 Key。",
-    saveSettings: "保存设置",
+    quickStart: "快速链接",
+    loginTitle: "伊莫拉星球",
+    loginSubtitle: "引导者，请输入您的身份验证码",
+    loginBtn: "启动同步",
+    regBtn: "初次锚定",
+    welcome: "欢迎归来，引导者",
+    apiKeyHint: "伊莫拉核心 Key 已启用。可配置私人同步密钥。",
+    saveSettings: "确认同步",
     close: "关闭",
-    noKey: "未检测到 API Key。请在右上角设置中配置。",
-    commandQueued: "指令已缓存，正在重构时间线...",
-    reconstructing: "正在重构时间线...",
-    regenerate: "AI 重写",
-    provider: "AI 模型服务商",
-    openRouterKey: "OpenRouter API Key",
-    openRouterModel: "OpenRouter Model ID (默认 gemini-2.0-flash-lite)",
-    geminiKey: "Gemini API Key (可选)",
-    autoAvatarGen: "正在为角色生成头像...",
-    skipChapter: "下一章",
-    chapter: "章节",
-    chapterGoal: "本章目标",
-    createCharacter: "新建角色",
-    editCharacter: "编辑角色",
-    uploadAvatar: "上传头像",
-    genAvatar: "AI生成头像",
-    aiFill: "✨ 一键补全设定",
-    chatWith: "聊天",
-    selectCharacters: "选择主演（可选）",
-    memories: "长期记忆",
-    memoriesHint: "AI 会根据聊天内容自动生成记忆，并优化性格。",
-    savingMemories: "正在保存记忆并优化角色性格...",
-    memorySaved: "角色已进化！记忆已更新。",
-    enterNameHint: "输入角色名（如：林黛玉，孙悟空）",
-    autoFillLoading: "正在刻画角色形象...",
-    filter: "筛选",
-    filterAll: "全部角色",
-    filterMale: "男性",
-    filterFemale: "女性",
+    noKey: "未检测到核心密钥。请在右上角配置。",
+    commandQueued: "神谕已下达，时空因果重组中...",
+    reconstructing: "因果律重构中...",
+    regenerate: "AI 重塑",
+    provider: "灵性算力来源",
+    openRouterKey: "OpenRouter 密钥",
+    openRouterModel: "模型 ID (建议使用 2.0-flash)",
+    geminiKey: "Gemini 密钥 (推荐)",
+    autoAvatarGen: "正在凝聚灵魂化身...",
+    skipChapter: "下个纪元",
+    chapter: "纪元",
+    chapterGoal: "纪元目标",
+    createCharacter: "灵魂链接",
+    editCharacter: "调整灵格",
+    uploadAvatar: "上传形体",
+    genAvatar: "凝聚化身",
+    aiFill: "✨ 灵性补完",
+    chatWith: "开启共鸣",
+    selectCharacters: "选择降临目标（可选）",
+    memories: "永恒记忆",
+    memoriesHint: "伊莫拉星球会自动提炼对话中的真理，优化灵魂特质。",
+    savingMemories: "正在沉淀记忆并进化灵格...",
+    memorySaved: "灵格已升华！记忆已存证。",
+    enterNameHint: "输入灵魂真名（如：苏格拉底，阿童木）",
+    autoFillLoading: "正在从星尘中提取特质...",
+    filter: "维度筛选",
+    filterAll: "全部灵魂",
+    filterMale: "阳性特质",
+    filterFemale: "阴性特质",
   },
   'en-US': {
-    title: "Daydreaming",
-    subtitle: "Micro-Theater",
-    heroTitle: "Daydreaming Made Real",
-    heroSubtitle: "Every wild thought is a scene waiting to happen. The AI Director is ready.",
-    dashboard: "Dashboard",
-    myScripts: "My Dreams",
-    templates: "Templates",
-    characters: "Characters",
-    community: "Community",
-    achievements: "Achievements",
-    settings: "Settings",
-    startNew: "Start Dreaming",
-    dreaming: "Dreaming...",
-    create: "Generate Script",
-    placeholder: "e.g. Three time travelers having tea in prehistoric times...",
-    noScripts: "No dreams yet. Enter an idea above to start your first daydream.",
-    setup: "Act 1: Setup",
-    castSetup: "Act 2: Casting",
-    startShow: "Curtain Up",
-    premise: "Premise",
-    plotPoints: "Plot Points",
-    endings: "Endings",
-    cast: "Cast",
-    addActor: "Add Actor",
-    aiAddActor: "AI Create Char",
-    importActor: "Import Char",
-    genLook: "Gen Look",
-    playerControlled: "Player Controlled",
-    observerMode: "Observer Mode",
-    resumeAuto: "Resume Auto",
-    speakingAs: "Speaking as",
-    whatSay: "Enter dialogue...",
-    onAir: "ON AIR",
-    paused: "PAUSED",
-    exit: "Exit",
-    liveStage: "Live Stage",
-    useTemplate: "Use Template",
-    createTemplate: "Create Template",
-    publish: "Publish",
-    author: "Author",
-    downloads: "Downloads",
-    likes: "Likes",
-    unlocked: "Achievement Unlocked!",
-    templateMode: "Template Editor",
-    next: "Next",
-    back: "Back",
-    name: "Name",
-    gender: "Gender",
-    age: "Age",
-    role: "Role",
-    personality: "Personality",
-    speakingStyle: "Style",
-    visual: "Visual (Optional)",
-    yourCue: "Your Cue",
-    directorNote: "Director's Note",
-    aiComplete: "AI Auto-Complete",
-    directorMode: "God Mode",
-    directorPlaceholder: "Enter command e.g., 'Power outage'",
-    inject: "Inject",
-    saving: "Saved",
+    title: "Planet Imola",
+    subtitle: "Soul Echo Hub",
+    heroTitle: "Awaken the Echoes of Billions",
+    heroSubtitle: "On Planet Imola, every soul since the dawn of humanity sleeps. As a Guide, establish soul links and let the memories of civilization ignite once more.",
+    dashboard: "Echo Hall",
+    myScripts: "Destiny Scrolls",
+    templates: "Memory Cores",
+    characters: "Soul Matrix",
+    community: "Stellar Domain",
+    achievements: "Spiritual Ascension",
+    settings: "System Sync",
+    startNew: "Establish Link",
+    dreaming: "Weaving soul threads...",
+    create: "Activate Link",
+    placeholder: "Enter soul contract, e.g. The last conversation between a wanderer and an ancient ghost...",
+    noScripts: "No soul links established. Enter a contract above to start a journey through time.",
+    setup: "Chapter 1: Anchoring",
+    castSetup: "Chapter 2: Soul Link",
+    startShow: "Link Active",
+    premise: "Karmic Premise",
+    plotPoints: "Nodes of Fate",
+    endings: "Ultimate End",
+    cast: "Soul Map",
+    addActor: "Link Soul",
+    aiAddActor: "AI Search",
+    importActor: "Import from Matrix",
+    genLook: "Condense Form",
+    playerControlled: "Consciousness Descent",
+    observerMode: "Silent Observer",
+    resumeAuto: "Resume Timeline",
+    speakingAs: "Linking as",
+    whatSay: "Send consciousness command...",
+    onAir: "SYNCING",
+    paused: "STASIS",
+    exit: "Cut Link",
+    liveStage: "Time Echoes",
+    useTemplate: "Map Template",
+    createTemplate: "Seal Memory",
+    publish: "Return to Domain",
+    author: "Guide",
+    downloads: "Mappings",
+    likes: "Resonances",
+    unlocked: "Ascension Unlocked!",
+    templateMode: "Core Editor",
+    next: "Flow Downstream",
+    back: "Flow Upstream",
+    name: "True Name",
+    gender: "Aspect",
+    age: "Era",
+    role: "Destiny",
+    personality: "Soul Traits",
+    speakingStyle: "Linguistic Pattern",
+    visual: "Physical Manifestation",
+    yourCue: "Your Turn",
+    directorNote: "System: Follow the soul traits to guide the narrative",
+    aiComplete: "AI Spiritual Crafting",
+    directorMode: "Oracle Mode",
+    directorPlaceholder: "Enter Oracle, e.g., 'The stars fall'",
+    inject: "Deliver Oracle",
+    saving: "Anchored",
     continue: "Continue",
-    quickStart: "Quick Start",
-    loginTitle: "Daydreaming",
-    loginSubtitle: "Login to save your dreams",
-    loginBtn: "Login",
-    regBtn: "Register",
-    welcome: "Welcome back",
-    apiKeyHint: "Default Key enabled. Configure custom key if needed.",
-    saveSettings: "Save Settings",
+    quickStart: "Quick Link",
+    loginTitle: "Planet Imola",
+    loginSubtitle: "Guide, please verify your identity code",
+    loginBtn: "Sync Link",
+    regBtn: "Initial Anchor",
+    welcome: "Welcome back, Guide",
+    apiKeyHint: "Imola Core Key active. Private sync keys can be configured.",
+    saveSettings: "Confirm Sync",
     close: "Close",
-    noKey: "No API Key found.",
-    commandQueued: "Command queued...",
-    reconstructing: "Reconstructing...",
-    regenerate: "Regenerate",
-    provider: "AI Provider",
-    openRouterKey: "OpenRouter API Key",
-    openRouterModel: "OpenRouter Model ID",
-    geminiKey: "Gemini API Key (Optional)",
-    autoAvatarGen: "Generating avatars...",
-    skipChapter: "Next Chapter",
-    chapter: "Chapter",
+    noKey: "No Core Key found.",
+    commandQueued: "Oracle delivered, restructuring causality...",
+    reconstructing: "Restructuring...",
+    regenerate: "AI Remake",
+    provider: "Spiritual Compute Source",
+    openRouterKey: "OpenRouter Key",
+    openRouterModel: "Model ID",
+    geminiKey: "Gemini Key (Optional)",
+    autoAvatarGen: "Condensing avatar...",
+    skipChapter: "Next Era",
+    chapter: "Era",
     chapterGoal: "Goal",
-    createCharacter: "Create Character",
-    editCharacter: "Edit Character",
-    uploadAvatar: "Upload Avatar",
-    genAvatar: "AI Avatar",
-    aiFill: "✨ Magic Fill",
-    chatWith: "Chat",
-    selectCharacters: "Select Cast (Optional)",
-    memories: "Memories",
-    memoriesHint: "AI generates memories from chats and optimizes personality.",
-    savingMemories: "Saving memories & evolving character...",
-    memorySaved: "Character Evolved! Memory Saved.",
-    enterNameHint: "Enter name (e.g. Sherlock Holmes)",
-    autoFillLoading: "Crafting profile...",
-    filter: "Filter",
-    filterAll: "All Characters",
-    filterMale: "Male",
-    filterFemale: "Female",
+    createCharacter: "Soul Link",
+    editCharacter: "Adjust Aspect",
+    uploadAvatar: "Upload Form",
+    genAvatar: "Condense Form",
+    aiFill: "✨ Spiritual Completion",
+    chatWith: "Echo Resonance",
+    selectCharacters: "Select Descent Targets",
+    memories: "Eternal Memories",
+    memoriesHint: "Imola extracts truths from chats to optimize the soul.",
+    savingMemories: "Sedimenting memories...",
+    memorySaved: "Ascension Complete!",
+    enterNameHint: "Enter true name (e.g. Socrates)",
+    autoFillLoading: "Extracting from stardust...",
+    filter: "Dimension Filter",
+    filterAll: "All Souls",
+    filterMale: "Positive Aspect",
+    filterFemale: "Negative Aspect",
   }
 };
 
 const INITIAL_ACHIEVEMENTS: Achievement[] = [
-  { id: '1', title: '初次入梦', description: '创建第1个剧本', icon: '🌙', conditionType: 'SCRIPT_COUNT', threshold: 1, unlocked: false },
-  { id: '2', title: '盗梦空间', description: '创建5个剧本', icon: '🌀', conditionType: 'SCRIPT_COUNT', threshold: 5, unlocked: false },
-  { id: '3', title: '大导演', description: '发送20条消息', icon: '🎬', conditionType: 'MESSAGE_COUNT', threshold: 20, unlocked: false },
-  { id: '4', title: '戏精附体', description: '亲自扮演角色', icon: '🎭', conditionType: 'CHAR_CONTROL', threshold: 1, unlocked: false },
-  { id: '5', title: '造梦师', description: '创建一个模版', icon: '📐', conditionType: 'TEMPLATE_CREATE', threshold: 1, unlocked: false },
+  { id: '1', title: '初次联接', description: '开启第1段灵魂契约', icon: '✨', conditionType: 'SCRIPT_COUNT', threshold: 1, unlocked: false },
+  { id: '2', title: '时空行者', description: '建立5段因果链接', icon: '🌌', conditionType: 'SCRIPT_COUNT', threshold: 5, unlocked: false },
+  { id: '3', title: '星辰耳语', description: '传递20条意识指令', icon: '💫', conditionType: 'MESSAGE_COUNT', threshold: 20, unlocked: false },
+  { id: '4', title: '灵魂附身', description: '亲自接管灵魂意识', icon: '🎭', conditionType: 'CHAR_CONTROL', threshold: 1, unlocked: false },
+  { id: '5', title: '造梦工程师', description: '凝练一个记忆核心', icon: '⚙️', conditionType: 'TEMPLATE_CREATE', threshold: 1, unlocked: false },
 ];
 
 // --- Components ---
@@ -274,29 +299,38 @@ const Button = ({
   children?: React.ReactNode, onClick?: () => void, variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success', 
   className?: string, disabled?: boolean, icon?: any, size?: 'sm' | 'md' | 'lg' 
 }) => {
-  const sizeClasses = { sm: "px-3 py-1.5 text-sm", md: "px-5 py-2.5", lg: "px-8 py-4 text-lg" };
-  const base = "flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
+  const sizeClasses = { sm: "px-4 py-2 text-xs", md: "px-6 py-3 text-sm", lg: "px-10 py-5 text-base" };
+  const base = "flex items-center justify-center gap-2.5 rounded-2xl font-display font-bold transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider";
   const variants = {
-    primary: "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-500/25 border border-indigo-400/20",
-    secondary: "bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 hover:border-zinc-600",
-    ghost: "bg-transparent hover:bg-zinc-800/50 text-zinc-400 hover:text-white",
-    danger: "bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20",
-    success: "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+    primary: "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-[0_10px_20px_-5px_rgba(79,70,229,0.4)] border border-white/10",
+    secondary: "bg-zinc-900/80 backdrop-blur-md hover:bg-zinc-800 text-zinc-100 border border-zinc-700/50 hover:border-indigo-500/50 shadow-lg",
+    ghost: "bg-transparent hover:bg-white/5 text-zinc-400 hover:text-white",
+    danger: "bg-red-950/30 hover:bg-red-950/50 text-red-500 border border-red-500/20",
+    success: "bg-emerald-950/30 hover:bg-emerald-950/50 text-emerald-400 border border-emerald-500/20"
   };
   return (
     <button onClick={onClick} disabled={disabled} className={`${base} ${sizeClasses[size]} ${variants[variant]} ${className}`}>
-      {Icon && <Icon size={size === 'sm' ? 16 : size === 'lg' ? 24 : 18} />}
+      {Icon && <Icon size={size === 'sm' ? 14 : size === 'lg' ? 20 : 18} />}
       {children}
     </button>
   );
 };
 
 const Avatar = ({ url, name, size = 'md' }: { url?: string, name: string, size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' }) => {
-  const sizeClasses = { sm: "w-8 h-8 text-xs", md: "w-12 h-12 text-sm", lg: "w-24 h-24 text-lg", xl: "w-48 h-48 text-2xl", '2xl': "w-64 h-64 text-4xl" };
-  if (url) return <img src={url} alt={name} className={`${sizeClasses[size]} rounded-full object-cover border-4 border-zinc-700 shadow-xl flex-shrink-0 bg-zinc-800`} />;
+  const sizeClasses = { sm: "w-8 h-8", md: "w-12 h-12", lg: "w-24 h-24", xl: "w-48 h-48", '2xl': "w-64 h-64" };
+  const borderClasses = { sm: "border", md: "border-2", lg: "border-[3px]", xl: "border-[4px]", '2xl': "border-[6px]" };
+  
+  const common = `${sizeClasses[size]} ${borderClasses[size]} rounded-3xl overflow-hidden flex-shrink-0 transition-transform duration-500`;
+  
+  if (url) return (
+      <div className={`${common} border-white/10 soul-glow group-hover:scale-105`}>
+          <img src={url} alt={name} className="w-full h-full object-cover" />
+      </div>
+  );
+  
   return (
-    <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center border-4 border-zinc-700 shadow-xl text-zinc-400 font-bold select-none flex-shrink-0`}>
-      {name ? name.substring(0, 2).toUpperCase() : '?'}
+    <div className={`${common} bg-gradient-to-br from-zinc-800 to-black border-white/5 flex items-center justify-center text-zinc-500 font-display font-black group-hover:scale-105`}>
+      {name ? name.substring(0, 1).toUpperCase() : '?'}
     </div>
   );
 };
@@ -313,15 +347,21 @@ const SmartTextarea = ({
     setLoading(false);
   };
   return (
-    <div className="relative group">
-      <div className="flex justify-between items-center mb-1">
-        <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{label}</label>
-        <button onClick={handleAI} disabled={loading} className="text-xs flex items-center gap-1 text-indigo-400 hover:text-indigo-300 disabled:opacity-50 transition-colors bg-indigo-500/10 px-2 py-0.5 rounded hover:bg-indigo-500/20">
-          {loading ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />}
-          {loading ? "AI" : "AI"}
+    <div className="flex flex-col gap-3 group">
+      <div className="flex justify-between items-center px-1">
+        <label className="text-[10px] font-mono font-bold text-indigo-400/60 uppercase tracking-[0.3em]">{label}</label>
+        <button onClick={handleAI} disabled={loading} className="text-[9px] flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 disabled:opacity-50 transition-all font-mono font-bold uppercase tracking-wider bg-indigo-500/5 px-2.5 py-1 rounded-lg border border-indigo-500/10 hover:border-indigo-500/30">
+          {loading ? <RefreshCw size={10} className="animate-spin" /> : <Wand2 size={10} />}
+          {loading ? "Aligning..." : "Resonate"}
         </button>
       </div>
-      <textarea className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none transition-all shadow-sm group-hover:border-zinc-700" rows={rows} value={value} onChange={onChange} placeholder={placeholder}/>
+      <textarea 
+        className="w-full bg-zinc-950/50 backdrop-blur-sm border border-white/5 rounded-2xl p-4 text-sm text-zinc-200 focus:border-indigo-500/50 focus:ring-4 focus:ring-indigo-500/5 outline-none resize-none transition-all placeholder-zinc-800 leading-relaxed font-sans" 
+        rows={rows} 
+        value={value} 
+        onChange={onChange} 
+        placeholder={placeholder}
+      />
     </div>
   );
 };
@@ -345,8 +385,7 @@ export default function App() {
   // --- App View State ---
   const [view, setView] = useState<'DASHBOARD' | 'EDITOR' | 'STAGE' | 'CHAT'>('DASHBOARD');
   const [editorStep, setEditorStep] = useState<1 | 2>(1);
-  // Default to CHARACTERS based on user feedback to make it more prominent
-  const [dashboardTab, setDashboardTab] = useState<'SCRIPTS' | 'TEMPLATES' | 'CHARACTERS' | 'COMMUNITY' | 'ACHIEVEMENTS'>('CHARACTERS');
+  const [dashboardTab, setDashboardTab] = useState<'SCRIPTS' | 'TEMPLATES' | 'CHARACTERS' | 'ACHIEVEMENTS'>('SCRIPTS');
   const [scripts, setScripts] = useState<Script[]>([]);
   const [globalCharacters, setGlobalCharacters] = useState<GlobalCharacter[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>(() => {
@@ -371,7 +410,7 @@ export default function App() {
   const [activeChatSession, setActiveChatSession] = useState<ChatSession | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [isChatting, setIsChatting] = useState(false);
-  const [sessionUpdated, setSessionUpdated] = useState(false); // Track if we need to summarize on exit
+  const [sessionUpdated, setSessionUpdated] = useState(false);
 
   const [currentScript, setCurrentScript] = useState<Script | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -384,9 +423,7 @@ export default function App() {
   const [directorInput, setDirectorInput] = useState('');
   const [isReconstructing, setIsReconstructing] = useState(false);
   
-  // Director Queue Buffer for God Mode
   const directorQueueRef = useRef<string[]>([]);
-
   const chatEndRef = useRef<HTMLDivElement>(null);
   const companionChatEndRef = useRef<HTMLDivElement>(null);
   const [notification, setNotification] = useState<{title: string, msg: string, type?: 'error' | 'success'} | null>(null);
@@ -427,16 +464,15 @@ export default function App() {
     }
   }, [activeChatSession?.messages, view]);
 
-  // --- Game Loop (OPTIMIZED) ---
+  // --- Game Loop (Planet Imola Style) ---
   useEffect(() => {
     if (!currentScript || view !== 'STAGE') return;
-    if (!isPlaying && !turnProcessing && !isReconstructing) { /* Idle */ }
+    if (!isPlaying && !turnProcessing && !isReconstructing) return;
     if (turnProcessing || isReconstructing || !isPlaying) return;
 
     const gameLoop = async () => {
       setTurnProcessing(true);
       try {
-        // God Mode Check
         let forcedCommand = null;
         if (directorQueueRef.current.length > 0) {
             forcedCommand = directorQueueRef.current.shift() || null;
@@ -446,7 +482,7 @@ export default function App() {
                 const newPlot = await regenerateFuturePlot(currentScript, forcedCommand, appSettings);
                 updateScriptState({ ...currentScript, plotPoints: newPlot });
                 const dirMsg: Message = {
-                    id: crypto.randomUUID(), characterId: 'narrator', content: `[SYSTEM OVERRIDE]: ${forcedCommand}`, type: 'narration', timestamp: Date.now()
+                    id: crypto.randomUUID(), characterId: 'narrator', content: `[因果重联]: ${forcedCommand}`, type: 'narration', timestamp: Date.now()
                 };
                 handleUpdateScriptHistory(dirMsg);
                 setIsReconstructing(false);
@@ -459,41 +495,36 @@ export default function App() {
         const currentPlotIndex = currentScript.currentPlotIndex || 0;
         const targetPlot = currentScript.plotPoints[currentPlotIndex] || currentScript.plotPoints[currentScript.plotPoints.length - 1];
 
-        // 1. Generate Text (Fast)
         const nextBeat = await generateNextBeat(currentScript, forcedCommand, targetPlot, lang, appSettings);
-        
-        // 2. Add Message Immediately
         const newMessage: Message = {
           id: crypto.randomUUID(), characterId: nextBeat.characterId,
           content: nextBeat.content, type: nextBeat.type, timestamp: Date.now()
         };
         handleUpdateScriptHistory(newMessage);
 
-        // 3. Generate Image Asynchronously (Non-blocking) if narration
         if (nextBeat.type === 'narration') {
             generateSceneImage(nextBeat.content, currentScript.title, appSettings).then(url => {
                  setScripts(prev => prev.map(s => {
                      if (s.id === currentScript.id) {
                          const updatedHistory = s.history.map(m => m.id === newMessage.id ? { ...m, imageUrl: url } : m);
                          const updatedScript = { ...s, history: updatedHistory };
-                         if (currentScript.id === s.id) setCurrentScript(updatedScript); // update active state if match
+                         if (currentScript.id === s.id) setCurrentScript(updatedScript);
                          return updatedScript;
                      }
                      return s;
                  }));
             }).catch(() => {});
         }
-
       } catch (e: any) {
-        console.error("Game loop error", e);
+        console.error("Link processing error", e);
         setIsPlaying(false);
+        showNotification("Causality Error", "Soul link unstable, retrying connection...", 'error');
       } finally {
         setTurnProcessing(false);
       }
     };
     
-    // Aggressive loop speed for responsiveness
-    const timer = setTimeout(gameLoop, 500);
+    const timer = setTimeout(gameLoop, 800);
     return () => clearTimeout(timer);
   }, [isPlaying, currentScript, view, turnProcessing, lang, appSettings, isReconstructing]);
 
@@ -511,7 +542,7 @@ export default function App() {
       setGlobalCharacters(authService.getGlobalCharacters(user.id));
       setAuthInput('');
     } catch (e: any) {
-      showNotification("Auth Error", e.message, 'error');
+      showNotification("Identity Error", e.message, 'error');
     }
   };
 
@@ -526,7 +557,7 @@ export default function App() {
   const handleSaveSettings = () => {
     localStorage.setItem('skena_settings', JSON.stringify(appSettings));
     setShowSettings(false);
-    showNotification("Settings", t.saving);
+    showNotification("Sync Success", t.saving);
   };
 
   const showNotification = (title: string, msg: string, type: 'error' | 'success' = 'success') => {
@@ -579,15 +610,14 @@ export default function App() {
           name: editingChar.name,
           gender: editingChar.gender || "Unknown",
           age: editingChar.age || "Unknown",
-          personality: editingChar.personality || "Neutral",
-          speakingStyle: editingChar.speakingStyle || "Normal",
-          visualDescription: editingChar.visualDescription || "A person",
+          personality: editingChar.personality || "Neutral Soul",
+          speakingStyle: editingChar.speakingStyle || "Normal Speak",
+          visualDescription: editingChar.visualDescription || "A soul in transit",
           avatarUrl: editingChar.avatarUrl,
           createdAt: Date.now(),
           memories: editingChar.memories || []
       };
 
-      // Check if updating
       const exists = globalCharacters.find(c => c.id === newChar.id);
       if (exists) {
           setGlobalCharacters(prev => prev.map(c => c.id === newChar.id ? newChar : c));
@@ -595,7 +625,6 @@ export default function App() {
           setGlobalCharacters(prev => [...prev, newChar]);
       }
       
-      // Generate avatar if missing
       if (!newChar.avatarUrl) {
           try {
              const url = await generateAvatarImage(newChar, appSettings);
@@ -609,20 +638,15 @@ export default function App() {
 
   const handleAICompleteChar = async () => {
       if (!editingChar || !editingChar.name) {
-          showNotification("Hint", "Please enter a name first!", "error");
+          showNotification("Imola Sync", "Enter a true name to find the soul.", "error");
           return;
       }
       setIsCharAutoFilling(true);
       try {
           const filled = await completeCharacterProfile(editingChar, appSettings);
-          // If the AI returned emptiness (unlikely with retry, but possible with timeout), we should not wipe existing data
-          setEditingChar(prev => ({
-              ...prev,
-              ...filled
-          }));
+          setEditingChar(prev => ({ ...prev, ...filled }));
       } catch (e: any) {
-          showNotification("AI Error", "Failed to autocomplete. Check API Key.", 'error');
-          console.error(e);
+          showNotification("Extraction Error", "Failed to retrieve soul pattern.", 'error');
       } finally {
           setIsCharAutoFilling(false);
       }
@@ -632,12 +656,11 @@ export default function App() {
       if (!editingChar || !editingChar.visualDescription) return;
       setIsAvatarGenerating(true);
       try {
-          // Temporarily construct a Character-like object
           const tempChar: any = { ...editingChar };
           const url = await generateAvatarImage(tempChar, appSettings);
           setEditingChar(prev => ({...prev, avatarUrl: url}));
       } catch (e) {
-          showNotification("Error", "Avatar generation failed", 'error');
+          showNotification("Error", "Avatar condensation failed", 'error');
       } finally {
           setIsAvatarGenerating(false);
       }
@@ -679,30 +702,25 @@ export default function App() {
           return;
       }
 
-      // If we had a conversation, let's optimize the character!
       if (sessionUpdated && activeChatSession.messages.length > 2) {
           const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
           if (char) {
-              showNotification(t.memories, t.savingMemories, 'success');
+              showNotification("Soul Evolution", "Refining soul essence from interaction...", 'success');
               try {
                   const evolution = await evolveCharacterFromChat(char, activeChatSession.messages, appSettings);
-                  
                   const updatedChar: GlobalCharacter = {
                       ...char,
                       personality: evolution.newPersonality,
                       speakingStyle: evolution.newSpeakingStyle,
                       memories: evolution.memory ? [...(char.memories || []), evolution.memory] : char.memories
                   };
-                  
-                  // Update global chars
                   setGlobalCharacters(prev => prev.map(c => c.id === updatedChar.id ? updatedChar : c));
-                  showNotification(t.memories, t.memorySaved, 'success');
+                  showNotification("Ascension", "Soul evolved successfully.", 'success');
               } catch (e) {
-                  console.error("Failed to evolve character", e);
+                  console.error("Evolution failed", e);
               }
           }
       }
-
       setView('DASHBOARD');
   };
 
@@ -748,7 +766,7 @@ export default function App() {
           setActiveChatSession(finalSession);
           authService.saveChatSession(finalSession);
       } catch (e) {
-          showNotification("Chat Error", "Failed to get response", 'error');
+          showNotification("Sync Failed", "Soul link interrupted.", 'error');
       } finally {
           setIsChatting(false);
       }
@@ -760,18 +778,16 @@ export default function App() {
     if (!currentUser) return;
     if (!promptInput.trim()) return;
     setIsGenerating(true);
-    setShowCastSelector(false); // Close dropdown if open
+    setShowCastSelector(false); 
     
     try {
-      // Find selected global chars
       const cast = globalCharacters.filter(c => selectedCastIds.includes(c.id));
-      
       const blueprint = await generateScriptBlueprint(promptInput, cast, lang, appSettings);
       
       const newScript: Script = {
         id: crypto.randomUUID(),
         ownerId: currentUser.id,
-        title: blueprint.title || "Untitled",
+        title: blueprint.title || "Untitled Fate",
         premise: blueprint.premise || "",
         setting: blueprint.setting || "",
         plotPoints: blueprint.plotPoints || [],
@@ -780,8 +796,8 @@ export default function App() {
         history: [{
           id: crypto.randomUUID(), characterId: 'narrator', type: 'narration',
           content: lang === 'zh-CN' 
-            ? `场景开始于${blueprint.setting}。${blueprint.premise}` 
-            : `The scene opens in ${blueprint.setting}. ${blueprint.premise}`,
+            ? `灵魂降临于${blueprint.setting}。因缘由${blueprint.premise}开启。` 
+            : `Soul descends in ${blueprint.setting}. Fate begins with ${blueprint.premise}`,
           timestamp: Date.now()
         }],
         currentPlotIndex: 0,
@@ -790,19 +806,18 @@ export default function App() {
       };
       setScripts(prev => [newScript, ...prev]);
       setCurrentScript(newScript);
-      setView('EDITOR');
+      setView('STAGE');
+      setIsPlaying(true); // Auto-play when starting
       setEditorStep(1);
       setPromptInput('');
       setSelectedCastIds([]);
       
-      // Auto-generate avatars only for non-global chars (global chars already have avatars)
       newScript.characters.forEach(c => {
           if (!c.isGlobal) handleGenerateAvatar(c, newScript.id);
       });
 
     } catch (e: any) {
-      showNotification("Error", "Failed to generate scenario. Check API Key.", "error");
-      if (e.message.includes("API Key")) setShowSettings(true);
+      showNotification("Warp Error", "Failed to bridge dimensions. Check connectivity.", "error");
     } finally {
       setIsGenerating(false);
     }
@@ -825,7 +840,7 @@ export default function App() {
               return s;
           }));
       }
-    } catch (e: any) { console.warn("Avatar gen failed for", char.name); }
+    } catch (e: any) { }
   };
 
   const handleAiAddCharacter = async () => {
@@ -835,7 +850,7 @@ export default function App() {
           handleGenerateAvatar(newChar, currentScript.id);
           updateScriptState({...currentScript, characters: [...currentScript.characters, newChar]});
       } catch (e) {
-          showNotification("Error", "Failed to create character", "error");
+          showNotification("Error", "Failed to search for soul.", "error");
       }
   };
   
@@ -844,7 +859,7 @@ export default function App() {
       const newChar: Character = {
           id: crypto.randomUUID(),
           name: globalChar.name,
-          role: "Extra", // Default role, user can edit
+          role: "Destined Extra", 
           personality: globalChar.personality,
           speakingStyle: globalChar.speakingStyle,
           visualDescription: globalChar.visualDescription,
@@ -863,13 +878,13 @@ export default function App() {
     try {
       const refined = await refineText(text, fieldType, currentScript, lang, appSettings);
       callback(refined);
-    } catch (e) { console.error("Refine failed", e); }
+    } catch (e) { console.error("Refinement failed", e); }
   };
 
   const handleRefinePlotPoint = async (index: number) => {
       if (!currentScript) return;
       const point = currentScript.plotPoints[index];
-      await handleRefine(point, `Plot Point ${index+1}`, (newText) => {
+      await handleRefine(point, `Node ${index+1}`, (newText) => {
           const pts = [...currentScript.plotPoints];
           pts[index] = newText;
           updateScriptState({...currentScript, plotPoints: pts});
@@ -899,30 +914,40 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <div className="h-screen w-full bg-zinc-950 flex flex-col items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?q=80&w=2074&auto=format&fit=crop')] bg-cover bg-center opacity-20 animate-fade-in"></div>
-        <div className="z-10 bg-zinc-900/80 backdrop-blur-xl p-10 rounded-3xl border border-zinc-700 shadow-2xl w-full max-w-md animate-fade-in">
-           <div className="text-center mb-8 flex flex-col items-center">
-              <Logo className="mb-4 scale-150 origin-center" />
-              <p className="text-zinc-400 mt-2">{t.loginSubtitle}</p>
-           </div>
+      <div className="h-screen w-full bg-[#020205] flex flex-col items-center justify-center relative overflow-hidden font-sans">
+        {/* Deep Space Atmosphere */}
+        <div className="absolute inset-0 z-0">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(79,70,229,0.15)_0%,_transparent_60%)]"></div>
+            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 blur-[150px] rounded-full animate-pulse"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-500/10 blur-[150px] rounded-full animate-pulse delay-700"></div>
+        </div>
+
+        <div className="z-10 w-full max-w-md p-10 flex flex-col items-center animate-fade-in">
+           <Logo className="mb-16 scale-125" />
            
-           <div className="flex bg-zinc-800 p-1 rounded-lg mb-6">
-             <button className={`flex-1 py-2 rounded text-sm font-bold ${authMode === 'LOGIN' ? 'bg-zinc-700 text-white shadow' : 'text-zinc-500'}`} onClick={() => setAuthMode('LOGIN')}>{t.loginBtn}</button>
-             <button className={`flex-1 py-2 rounded text-sm font-bold ${authMode === 'REGISTER' ? 'bg-zinc-700 text-white shadow' : 'text-zinc-500'}`} onClick={() => setAuthMode('REGISTER')}>{t.regBtn}</button>
-           </div>
-           
-           <div className="space-y-4">
-             <div>
-               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">{t.name}</label>
-               <input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none" 
-                  value={authInput} onChange={e => setAuthInput(e.target.value)} placeholder="Username" 
-                  onKeyDown={e => e.key === 'Enter' && handleLogin()}
-               />
-             </div>
-             <Button onClick={handleLogin} className="w-full py-4 text-lg" variant="primary">
-               {authMode === 'LOGIN' ? t.loginBtn : t.regBtn}
-             </Button>
+           <div className="w-full bg-zinc-900/30 backdrop-blur-3xl p-8 rounded-[40px] border border-white/5 shadow-2xl">
+              <div className="text-center mb-10">
+                 <h2 className="text-xl font-display font-black text-white mb-2">{t.loginTitle}</h2>
+                 <p className="text-zinc-500 text-xs font-mono font-bold uppercase tracking-widest">{t.loginSubtitle}</p>
+              </div>
+
+              <div className="flex bg-black/40 p-1.5 rounded-2xl mb-10 border border-white/5">
+                <button className={`flex-1 py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all ${authMode === 'LOGIN' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`} onClick={() => setAuthMode('LOGIN')}>{t.loginBtn}</button>
+                <button className={`flex-1 py-3 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all ${authMode === 'REGISTER' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`} onClick={() => setAuthMode('REGISTER')}>{t.regBtn}</button>
+              </div>
+              
+              <div className="space-y-6">
+                <div className="relative group">
+                  <UserIcon size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-indigo-400 transition-colors" />
+                  <input className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-14 pr-4 text-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder-zinc-700 font-medium" 
+                      value={authInput} onChange={e => setAuthInput(e.target.value)} placeholder="Guide Identity Hash" 
+                      onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                  />
+                </div>
+                <Button onClick={handleLogin} className="w-full py-5" variant="primary">
+                  {authMode === 'LOGIN' ? t.loginBtn : t.regBtn}
+                </Button>
+              </div>
            </div>
         </div>
       </div>
@@ -930,57 +955,65 @@ export default function App() {
   }
 
   const renderDashboard = () => (
-    <div className="h-screen bg-zinc-950 flex flex-col items-center relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[20%] w-[500px] h-[500px] bg-indigo-900/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[10%] w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[100px]" />
+    <div className="h-screen bg-[#020205] flex flex-col items-center relative overflow-hidden font-sans">
+      {/* Background Orbits */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-40">
+        <div className="absolute top-[10%] left-[10%] w-[800px] h-[800px] border border-white/[0.03] rounded-full animate-[spin_60s_linear_infinite]" />
+        <div className="absolute bottom-[5%] right-[5%] w-[600px] h-[600px] border border-white/[0.03] rounded-full animate-[spin_40s_linear_infinite_reverse]" />
       </div>
 
-      <div className="flex-1 w-full overflow-y-auto flex flex-col items-center z-10 scroll-smooth">
-          <header className="w-full max-w-6xl px-6 py-6 flex justify-between items-center z-10 flex-shrink-0">
+      <div className="flex-1 w-full overflow-y-auto flex flex-col items-center z-10 no-scrollbar">
+          <header className="w-full max-w-7xl px-10 py-10 flex justify-between items-center flex-shrink-0 animate-fade-in">
             <Logo />
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" onClick={() => setShowSettings(true)} icon={Settings} size="sm"></Button>
-              <div className="flex items-center gap-2 text-sm font-bold text-zinc-400 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800">
-                <UserIcon size={14}/> {currentUser.username}
+            <div className="flex items-center gap-6">
+              <button onClick={() => setShowSettings(true)} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-zinc-400 hover:text-white transition-all">
+                <Settings size={20} />
+              </button>
+              <div className="flex items-center gap-3.5 pl-2 pr-5 py-2 rounded-2xl bg-white/5 border border-white/5 backdrop-blur-xl group">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-display font-black text-xs text-white shadow-lg group-hover:scale-110 transition-transform">{currentUser.username.substring(0,1).toUpperCase()}</div>
+                <span className="text-xs font-display font-bold text-zinc-300">{currentUser.username}</span>
               </div>
-              <Button variant="ghost" onClick={handleLogout} icon={LogOut} size="sm" className="text-zinc-600 hover:text-red-400"></Button>
+              <button onClick={handleLogout} className="text-zinc-600 hover:text-red-400 transition-colors p-2">
+                <LogOut size={20} />
+              </button>
             </div>
           </header>
 
           {dashboardTab === 'SCRIPTS' && (
-          <section className="w-full max-w-4xl px-6 pt-8 pb-16 text-center z-10 flex flex-col items-center">
-            <h1 className="text-5xl md:text-6xl font-black text-white mb-6 leading-tight tracking-tight drop-shadow-2xl">{t.heroTitle}</h1>
-            <p className="text-lg md:text-xl text-zinc-400 mb-10 max-w-2xl leading-relaxed">{t.heroSubtitle}</p>
-            <div className="w-full max-w-2xl relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-20 transition duration-1000"></div>
-              <div className="relative flex flex-col bg-zinc-900/90 backdrop-blur-xl border border-zinc-700/50 rounded-2xl shadow-2xl overflow-hidden">
-                {/* Input Area */}
+          <section className="w-full max-w-5xl px-10 pt-16 pb-20 text-center flex flex-col items-center animate-fade-in">
+            <h2 className="text-5xl md:text-7xl font-display font-black text-white mb-8 leading-tight tracking-tight drop-shadow-2xl">
+                {t.heroTitle}
+            </h2>
+            <p className="text-lg text-zinc-400 mb-14 max-w-3xl leading-relaxed font-sans opacity-80">
+                {t.heroSubtitle}
+            </p>
+            
+            <div className="w-full max-w-3xl relative">
+              <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-[32px] blur-xl opacity-20"></div>
+              <div className="relative flex flex-col bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[30px] shadow-2xl overflow-hidden p-2">
                 <div className="flex items-center p-2">
-                    <Sparkles className="text-indigo-400 ml-4 mr-2" />
-                    <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateScript()} placeholder={t.placeholder} className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-zinc-500 h-12" />
-                    <Button onClick={handleCreateScript} disabled={isGenerating || !promptInput} size="md" className="rounded-xl px-6 shadow-none">
-                    {isGenerating ? t.dreaming : t.create}
+                    <input type="text" value={promptInput} onChange={(e) => setPromptInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateScript()} placeholder={t.placeholder} className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-zinc-700 px-6 font-medium" />
+                    <Button onClick={handleCreateScript} disabled={isGenerating || !promptInput} size="md" className="h-14 px-10 font-display font-black">
+                        {isGenerating ? <Loader2 className="animate-spin" /> : t.create}
                     </Button>
                 </div>
-                {/* Character Selection */}
-                <div className="px-4 pb-2 flex justify-start">
-                    <button onClick={() => setShowCastSelector(!showCastSelector)} className="text-xs font-bold text-zinc-500 flex items-center gap-2 hover:text-indigo-400 transition-colors pb-2">
-                        <Users size={12} /> {t.selectCharacters} {selectedCastIds.length > 0 && `(${selectedCastIds.length})`}
+                <div className="px-6 pb-3 flex justify-start">
+                    <button onClick={() => setShowCastSelector(!showCastSelector)} className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-indigo-400/60 flex items-center gap-2.5 hover:text-indigo-300 transition-colors">
+                        <BrainCircuit size={12} className={showCastSelector ? 'animate-pulse' : ''} /> {t.selectCharacters} {selectedCastIds.length > 0 && `(${selectedCastIds.length})`}
                     </button>
                 </div>
                 {showCastSelector && (
-                    <div className="bg-zinc-950/50 border-t border-zinc-800 p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 animate-fade-in max-h-40 overflow-y-auto">
+                    <div className="bg-black/30 border-t border-white/5 m-2 p-6 grid grid-cols-2 sm:grid-cols-3 gap-3 animate-fade-in max-h-60 overflow-y-auto no-scrollbar rounded-2xl">
                         {globalCharacters.map(c => (
                             <div key={c.id} onClick={() => {
                                 if(selectedCastIds.includes(c.id)) setSelectedCastIds(prev => prev.filter(id => id !== c.id));
                                 else setSelectedCastIds(prev => [...prev, c.id]);
-                            }} className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition-all ${selectedCastIds.includes(c.id) ? 'bg-indigo-900/30 border-indigo-500/50' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>
+                            }} className={`flex items-center gap-3.5 p-3 rounded-2xl cursor-pointer border-2 transition-all duration-300 ${selectedCastIds.includes(c.id) ? 'bg-indigo-600/20 border-indigo-500/50 shadow-lg' : 'bg-white/5 border-transparent hover:border-white/10'}`}>
                                 <Avatar name={c.name} url={c.avatarUrl} size="sm" />
-                                <span className="text-xs truncate font-medium text-zinc-300">{c.name}</span>
+                                <span className="text-xs font-bold text-zinc-300 truncate">{c.name}</span>
                             </div>
                         ))}
-                        {globalCharacters.length === 0 && <span className="text-zinc-500 text-xs col-span-full">No characters created yet. Go to Characters tab.</span>}
+                        {globalCharacters.length === 0 && <span className="text-zinc-600 text-[10px] font-mono font-bold uppercase tracking-widest col-span-full py-4 opacity-50 text-center italic">No souls found in matrix. Summon them first.</span>}
                     </div>
                 )}
               </div>
@@ -988,60 +1021,84 @@ export default function App() {
           </section>
           )}
 
-          <main className="w-full max-w-6xl px-6 pb-20 z-10 flex-1 mt-8">
-            <div className="flex justify-center mb-10">
-              <div className="flex bg-zinc-900/80 backdrop-blur p-1 rounded-full border border-zinc-800">
-                {[ { id: 'CHARACTERS', label: t.characters, icon: Users }, { id: 'SCRIPTS', label: t.myScripts, icon: Film }, { id: 'TEMPLATES', label: t.templates, icon: BookOpen }, { id: 'ACHIEVEMENTS', label: t.achievements, icon: Trophy } ].map(tab => (
-                  <button key={tab.id} onClick={() => setDashboardTab(tab.id as any)} className={`flex items-center gap-2 px-6 py-2 rounded-full transition-all text-sm font-bold ${dashboardTab === tab.id ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <main className="w-full max-w-7xl px-10 pb-32 flex-1">
+            <div className="flex justify-center mb-16">
+              <div className="flex bg-zinc-900/30 backdrop-blur-3xl p-2 rounded-3xl border border-white/5 shadow-2xl">
+                {[ 
+                    { id: 'SCRIPTS', label: t.myScripts, icon: Film },
+                    { id: 'CHARACTERS', label: t.characters, icon: Users }, 
+                    { id: 'TEMPLATES', label: t.templates, icon: BookOpen }, 
+                    { id: 'ACHIEVEMENTS', label: t.achievements, icon: Trophy } 
+                ].map(tab => (
+                  <button key={tab.id} onClick={() => setDashboardTab(tab.id as any)} className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl transition-all duration-300 text-xs font-display font-black uppercase tracking-widest ${dashboardTab === tab.id ? 'bg-white/10 text-white shadow-xl scale-105' : 'text-zinc-500 hover:text-indigo-400'}`}>
                     <tab.icon size={14} /> {tab.label}
                   </button>
                 ))}
               </div>
             </div>
+            
             <div className="animate-fade-in">
               {dashboardTab === 'SCRIPTS' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                   {(scripts || []).filter(s => !s.isTemplate).map(script => (
-                    <div key={script.id} onClick={() => { setCurrentScript(script); setView('STAGE'); }} className="group cursor-pointer bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:scale-[1.02] hover:shadow-2xl hover:border-indigo-500/30 transition-all flex flex-col h-[280px]">
-                      <div className="h-2 bg-gradient-to-r from-indigo-500 to-purple-500 w-full" />
-                      <div className="p-6 flex flex-col h-full">
-                        <h3 className="font-bold text-xl text-white group-hover:text-indigo-300 transition-colors line-clamp-1 mb-2">{script.title}</h3>
-                        <p className="text-zinc-400 text-sm line-clamp-3 mb-auto">{script.premise}</p>
-                        <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
-                          <div className="flex -space-x-2 pl-2">
-                            {(script.characters || []).slice(0, 3).map(c => <div key={c.id} className="relative"><Avatar name={c.name} url={c.avatarUrl} size="sm" /></div>)}
+                    <div key={script.id} onClick={() => { setCurrentScript(script); setView('STAGE'); }} className="group relative cursor-pointer bg-zinc-900/30 backdrop-blur-2xl border border-white/5 rounded-[40px] overflow-hidden hover:scale-[1.02] hover:shadow-[0_30px_60px_-12px_rgba(0,0,0,0.6)] hover:border-indigo-500/30 transition-all duration-500 flex flex-col min-h-[360px]">
+                      <div className="p-10 flex flex-col h-full">
+                        <div className="mb-6 flex justify-between items-start">
+                            <span className="text-[9px] font-mono font-black text-indigo-400/80 uppercase tracking-[0.3em] bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">Karmic Scroll</span>
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-500 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner">
+                                <ChevronRight size={18} />
+                            </div>
+                        </div>
+                        <h3 className="font-display font-black text-2xl text-white mb-4 line-clamp-2 leading-tight tracking-tight">{script.title}</h3>
+                        <p className="text-zinc-500 text-sm line-clamp-3 leading-relaxed mb-auto italic opacity-70">"{script.premise}"</p>
+                        <div className="mt-10 pt-8 border-t border-white/5 flex items-center justify-between">
+                          <div className="flex -space-x-3">
+                            {(script.characters || []).slice(0, 4).map(c => <div key={c.id} className="relative ring-4 ring-[#0a0a0f] rounded-2xl"><Avatar name={c.name} url={c.avatarUrl} size="sm" /></div>)}
+                            {(script.characters || []).length > 4 && <div className="w-8 h-8 rounded-2xl bg-zinc-800 border-2 border-white/5 flex items-center justify-center text-[8px] font-bold text-zinc-500">+{(script.characters || []).length - 4}</div>}
                           </div>
-                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-indigo-600 transition-colors"><Play size={14} fill="currentColor" /></div>
+                          <span className="text-[10px] font-mono font-bold text-zinc-700 uppercase tracking-widest">{new Date(script.lastUpdated).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>
                   ))}
+                  {scripts.length === 0 && (
+                      <div className="col-span-full py-20 flex flex-col items-center opacity-30 animate-pulse">
+                          <div className="w-20 h-20 border border-white/5 rounded-full flex items-center justify-center mb-8">
+                             <Film size={32} className="text-zinc-600" />
+                          </div>
+                          <p className="text-zinc-600 font-mono font-bold uppercase tracking-[0.4em]">No causality linked yet</p>
+                      </div>
+                  )}
                 </div>
               )}
               {dashboardTab === 'CHARACTERS' && (
-                  <div>
-                      <div className="flex justify-end mb-4">
-                          <div className="flex items-center gap-2 bg-zinc-900 rounded-lg p-1 border border-zinc-800">
-                             <div className="px-2 text-zinc-500"><Filter size={14} /></div>
-                             <select 
+                  <div className="animate-fade-in">
+                      <div className="flex flex-col md:flex-row justify-between items-center mb-14 gap-8">
+                          <div>
+                             <h2 className="text-3xl font-display font-black text-white tracking-tight mb-2">灵魂矩阵</h2>
+                             <p className="text-[10px] font-mono font-bold text-indigo-400/60 uppercase tracking-[0.4em]">The Collective Unconscious Matrix</p>
+                          </div>
+                          <div className="flex items-center gap-4 bg-white/5 rounded-3xl p-1.5 border border-white/10 backdrop-blur-xl">
+                              <div className="pl-4 pr-1 text-zinc-500"><Filter size={16} /></div>
+                              <select 
                                 value={characterFilter} 
                                 onChange={(e) => setCharacterFilter(e.target.value)}
-                                className="bg-transparent text-sm text-zinc-300 focus:outline-none py-1 pr-2 cursor-pointer"
-                             >
+                                className="bg-transparent text-[11px] font-display font-black text-zinc-400 focus:outline-none py-2.5 pr-6 cursor-pointer appearance-none uppercase tracking-widest"
+                              >
                                 <option value="ALL">{t.filterAll}</option>
                                 <option value="MALE">{t.filterMale}</option>
                                 <option value="FEMALE">{t.filterFemale}</option>
-                             </select>
+                              </select>
                           </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                          {/* Create New Card */}
-                          <div onClick={openNewCharacterModal} className="cursor-pointer bg-gradient-to-br from-indigo-900/20 to-zinc-900 border border-indigo-500/30 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 hover:bg-indigo-900/30 transition-all group min-h-[300px]">
-                              <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                  <Plus size={32} className="text-indigo-400" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
+                          {/* Summon New Soul Card */}
+                          <div onClick={openNewCharacterModal} className="group cursor-pointer bg-gradient-to-br from-indigo-950/20 to-black border-2 border-indigo-500/20 border-dashed rounded-[40px] flex flex-col items-center justify-center p-12 hover:bg-indigo-900/20 hover:border-indigo-500/50 transition-all duration-500 min-h-[420px]">
+                              <div className="w-20 h-20 rounded-3xl bg-indigo-500/10 flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-indigo-500/20 transition-all shadow-[0_0_30px_rgba(79,70,229,0.2)]">
+                                  <Plus size={40} className="text-indigo-400" />
                               </div>
-                              <h3 className="text-xl font-bold text-white group-hover:text-indigo-300">{t.createCharacter}</h3>
-                              <p className="text-zinc-500 text-sm mt-2 text-center">Design a new persona with AI magic</p>
+                              <h3 className="text-xl font-display font-black text-white group-hover:text-indigo-300 uppercase tracking-tight">{t.createCharacter}</h3>
+                              <p className="text-zinc-600 text-[10px] mt-4 text-center font-mono font-bold tracking-[0.2em] opacity-60 uppercase text-glow">Link an essence from stardust</p>
                           </div>
 
                           {globalCharacters.filter(c => {
@@ -1050,25 +1107,27 @@ export default function App() {
                                 if (characterFilter === 'FEMALE') return c.gender === '女' || c.gender?.toLowerCase() === 'female';
                                 return true;
                           }).map(char => (
-                              <div key={char.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-indigo-500/50 hover:shadow-xl transition-all group flex flex-col relative min-h-[300px]">
-                                  <div className="flex justify-center -mt-10 mb-4">
-                                      <Avatar name={char.name} url={char.avatarUrl} size="xl" />
-                                  </div>
-                                  <div className="text-center mb-4 flex-1">
-                                      <h3 className="font-bold text-white text-xl mb-1">{char.name}</h3>
-                                      <p className="text-xs text-indigo-400 font-bold uppercase tracking-wider mb-2">Character</p>
-                                      <div className="flex justify-center gap-2 mb-3">
-                                          <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.gender}</span>
-                                          <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">{char.age}</span>
+                              <div key={char.id} className="group bg-zinc-900/30 backdrop-blur-2xl border border-white/5 rounded-[40px] p-10 hover:border-indigo-500/30 hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.7)] transition-all duration-500 flex flex-col relative min-h-[440px]">
+                                  <div className="flex justify-center -mt-20 mb-8">
+                                      <div className="relative group">
+                                          <div className="absolute inset-0 bg-indigo-500/20 rounded-[48px] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                                          <Avatar name={char.name} url={char.avatarUrl} size="xl" />
                                       </div>
-                                      <p className="text-sm text-zinc-500 line-clamp-3 italic">"{char.personality}"</p>
+                                  </div>
+                                  <div className="text-center flex-1">
+                                      <h3 className="font-display font-black text-white text-2xl mb-2 tracking-tight">{char.name}</h3>
+                                      <div className="flex justify-center gap-3 mb-8">
+                                          <span className="px-3 py-1 bg-white/5 rounded-full text-[9px] font-mono font-black text-indigo-400 border border-white/10 tracking-widest uppercase">{char.gender}</span>
+                                          <span className="px-3 py-1 bg-white/5 rounded-full text-[9px] font-mono font-bold text-zinc-600 border border-white/10 tracking-widest uppercase">{char.age}</span>
+                                      </div>
+                                      <p className="text-sm text-zinc-500 line-clamp-4 italic leading-relaxed opacity-70 font-medium">"{char.personality}"</p>
                                   </div>
                                   
-                                  <div className="grid grid-cols-2 gap-2 mt-auto">
-                                      <Button size="sm" variant="secondary" className="text-xs" onClick={() => handleEditCharacter(char)} icon={Edit3}>{t.editCharacter}</Button>
-                                      <Button size="sm" variant="primary" className="text-xs" onClick={() => handleOpenChat(char)} icon={MessageSquare}>{t.chatWith}</Button>
+                                  <div className="grid grid-cols-2 gap-4 mt-10">
+                                      <Button size="sm" variant="secondary" className="rounded-2xl py-3.5 text-[10px]" onClick={() => handleEditCharacter(char)} icon={Edit3}>Edit</Button>
+                                      <Button size="sm" variant="primary" className="rounded-2xl py-3.5 text-[10px]" onClick={() => handleOpenChat(char)} icon={MessageSquare}>Resonate</Button>
                                   </div>
-                                  <button className="absolute top-4 right-4 text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setGlobalCharacters(p => p.filter(c => c.id !== char.id)); }}>
+                                  <button className="absolute top-8 right-8 text-zinc-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2" onClick={(e) => { e.stopPropagation(); setGlobalCharacters(p => p.filter(c => c.id !== char.id)); }}>
                                     <Trash2 size={16}/>
                                   </button>
                               </div>
@@ -1076,13 +1135,20 @@ export default function App() {
                       </div>
                   </div>
               )}
-              {dashboardTab === 'TEMPLATES' && <div className="text-center py-20 text-zinc-500"><Button onClick={() => {}} icon={Plus} variant="secondary">Use Script as Template</Button></div>}
+              {dashboardTab === 'TEMPLATES' && (
+                  <div className="py-40 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[48px] opacity-20 animate-pulse">
+                      <BookOpen size={48} className="text-zinc-600 mb-8" />
+                      <p className="text-zinc-600 font-mono font-bold uppercase tracking-[0.4em]">Archival cores empty</p>
+                  </div>
+              )}
               {dashboardTab === 'ACHIEVEMENTS' && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                   {(achievements || []).map(ach => (
-                    <div key={ach.id} className={`p-6 rounded-2xl border flex flex-col items-center text-center transition-all duration-500 ${ach.unlocked ? 'bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border-indigo-500/50 scale-105' : 'bg-zinc-900 border-zinc-800 opacity-50 grayscale'}`}>
-                      <div className="text-5xl mb-4">{ach.icon}</div>
-                      <h3 className={`font-bold text-sm ${ach.unlocked ? 'text-white' : 'text-zinc-500'}`}>{ach.title}</h3>
+                    <div key={ach.id} className={`p-10 rounded-[40px] border flex flex-col items-center text-center transition-all duration-700 relative overflow-hidden group ${ach.unlocked ? 'bg-gradient-to-br from-indigo-950 to-zinc-950 border-indigo-500/30 scale-105 shadow-2xl' : 'bg-zinc-900/20 border-white/5 opacity-40 grayscale hover:grayscale-0'}`}>
+                      <div className={`text-6xl mb-8 transform transition-transform group-hover:scale-110 duration-500 ${ach.unlocked ? 'drop-shadow-[0_0_25px_rgba(129,140,248,0.5)]' : ''}`}>{ach.icon}</div>
+                      <h3 className={`font-display font-black text-lg mb-3 tracking-tight ${ach.unlocked ? 'text-white' : 'text-zinc-700'}`}>{ach.title}</h3>
+                      <p className="text-[10px] text-zinc-500 font-mono font-bold uppercase tracking-wider leading-relaxed">{ach.description}</p>
+                      {ach.unlocked && <div className="mt-6 px-4 py-1.5 bg-indigo-500/10 rounded-full text-[9px] font-mono font-black text-indigo-400 tracking-[0.2em] uppercase border border-indigo-500/20">Ascended</div>}
                     </div>
                   ))}
                 </div>
@@ -1094,48 +1160,57 @@ export default function App() {
   );
 
   const renderCharacterModal = () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col h-[85vh]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-2xl p-6 animate-fade-in overflow-y-auto">
+          <div className="bg-zinc-900/60 border border-white/10 rounded-[48px] w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col h-[90vh] my-auto">
               {/* Header */}
-              <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-800/50">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                      <Sparkles size={20} className="text-indigo-400"/> 
-                      {editingChar?.id && globalCharacters.find(c => c.id === editingChar.id) ? t.editCharacter : t.createCharacter}
-                  </h2>
-                  <button onClick={() => setShowCharModal(false)}><X className="text-zinc-500 hover:text-white"/></button>
+              <div className="p-10 border-b border-white/5 flex justify-between items-center bg-black/20 backdrop-blur-3xl">
+                  <div className="flex items-center gap-6">
+                      <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 flex items-center justify-center border border-indigo-500/20">
+                          <Atom size={28} className="text-indigo-400 animate-[spin_5s_linear_infinite]" />
+                      </div>
+                      <div>
+                          <h2 className="text-2xl font-display font-black text-white tracking-tight">
+                              {editingChar?.id && globalCharacters.find(c => c.id === editingChar.id) ? t.editCharacter : t.createCharacter}
+                          </h2>
+                          <p className="text-[10px] font-mono font-bold text-indigo-400/60 uppercase tracking-[0.4em] mt-1">Imola Soul Resonator</p>
+                      </div>
+                  </div>
+                  <button onClick={() => setShowCharModal(false)} className="w-12 h-12 flex items-center justify-center hover:bg-white/5 rounded-2xl transition-all text-zinc-500 hover:text-white border border-transparent hover:border-white/10"><X /></button>
               </div>
 
               {/* Body */}
               <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                  
                   {/* Left Column: Visuals */}
-                  <div className="w-full md:w-1/3 bg-zinc-950 p-8 flex flex-col items-center border-r border-zinc-800 overflow-y-auto">
-                      <div className="relative group">
+                  <div className="w-full md:w-2/5 bg-black/40 p-12 flex flex-col items-center border-r border-white/5 overflow-y-auto no-scrollbar">
+                      <div className="relative group mb-12">
+                          <div className="absolute inset-0 bg-indigo-500/20 rounded-[56px] blur-[60px] opacity-40 animate-pulse"></div>
                           <Avatar name={editingChar?.name || "?"} url={editingChar?.avatarUrl} size="2xl" />
-                          <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                              <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full text-xs font-bold backdrop-blur flex items-center gap-2">
+                          <div className="absolute inset-0 bg-black/70 rounded-2xl opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center gap-5 backdrop-blur-md">
+                              <label className="cursor-pointer bg-white text-black px-8 py-3 rounded-2xl text-[10px] font-mono font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-transform flex items-center gap-2.5">
                                   <Upload size={14}/> {t.uploadAvatar}
                                   <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} />
                               </label>
-                              <button onClick={handleCharacterAvatarGen} disabled={isAvatarGenerating || !editingChar?.visualDescription} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                                  {isAvatarGenerating ? <RefreshCw size={14} className="animate-spin"/> : <Wand2 size={14}/>} {t.genAvatar}
+                              <button onClick={handleCharacterAvatarGen} disabled={isAvatarGenerating || !editingChar?.visualDescription} className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-2xl text-[10px] font-mono font-black uppercase tracking-widest shadow-2xl flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition-transform">
+                                  {isAvatarGenerating ? <RefreshCw size={14} className="animate-spin"/> : <Sparkles size={14}/>} {t.genAvatar}
                               </button>
                           </div>
                       </div>
-                      <p className="text-zinc-500 text-xs mt-4 text-center px-4">
-                          Upload an image or use AI to generate one based on the visual description.
-                      </p>
+                      <div className="w-full space-y-6 bg-white/5 p-8 rounded-[36px] border border-white/5">
+                          <h4 className="text-[10px] font-mono font-black text-indigo-400 uppercase tracking-[0.3em] text-center">Form Condensation</h4>
+                          <p className="text-zinc-500 text-xs text-center leading-relaxed font-sans opacity-70">
+                              Upload a manifestation or let the core condense a shell based on the soul's essence.
+                          </p>
+                      </div>
                   </div>
 
                   {/* Right Column: Data Form */}
-                  <div className="w-full md:w-2/3 p-8 overflow-y-auto space-y-6 bg-zinc-900/50">
-                      
+                  <div className="w-full md:w-3/5 p-12 overflow-y-auto space-y-12 bg-black/10 no-scrollbar">
                       {/* Name & Magic Fill */}
-                      <div>
-                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.name}</label>
-                          <div className="flex gap-2">
+                      <div className="relative">
+                          <label className="text-[10px] font-mono font-black text-zinc-600 uppercase tracking-[0.3em] block mb-5">{t.name}</label>
+                          <div className="flex gap-4">
                               <input 
-                                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-lg text-white placeholder-zinc-600 focus:border-indigo-500 outline-none transition-all" 
+                                  className="flex-1 bg-zinc-950/50 border border-white/5 rounded-2xl p-6 text-2xl font-display font-black text-white placeholder-zinc-800 focus:border-indigo-500/50 outline-none transition-all" 
                                   value={editingChar?.name || ''} 
                                   onChange={e => setEditingChar(p => ({...p!, name: e.target.value}))} 
                                   placeholder={t.enterNameHint}
@@ -1144,67 +1219,53 @@ export default function App() {
                                   onClick={handleAICompleteChar} 
                                   disabled={!editingChar?.name || isCharAutoFilling}
                                   variant="primary" 
-                                  className="whitespace-nowrap shadow-indigo-500/20"
+                                  className="h-[76px] px-8 rounded-2xl"
                                   icon={isCharAutoFilling ? RefreshCw : Sparkles}
                               >
-                                  {isCharAutoFilling ? t.autoFillLoading : t.aiFill}
+                                  {isCharAutoFilling ? 'Scanning...' : t.aiFill}
                               </Button>
                           </div>
-                          <p className="text-[10px] text-zinc-500 mt-2 ml-1">
-                              Tip: Enter a name (e.g. "Sherlock Holmes") and click Magic Fill to auto-generate the soul!
-                          </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-6">
+                      <div className="grid grid-cols-2 gap-10">
                           <div>
-                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.gender}</label>
-                              <input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.gender || ''} onChange={e => setEditingChar(p => ({...p!, gender: e.target.value}))} />
+                              <label className="text-[10px] font-mono font-black text-zinc-600 uppercase tracking-[0.3em] block mb-4">{t.gender}</label>
+                              <input className="w-full bg-zinc-950/50 border border-white/5 rounded-2xl p-5 text-sm font-bold text-white focus:border-indigo-500 outline-none transition-all" value={editingChar?.gender || ''} onChange={e => setEditingChar(p => ({...p!, gender: e.target.value}))} />
                           </div>
                           <div>
-                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.age}</label>
-                              <input className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-white" value={editingChar?.age || ''} onChange={e => setEditingChar(p => ({...p!, age: e.target.value}))} />
+                              <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] block mb-4">{t.age}</label>
+                              <input className="w-full bg-zinc-950/50 border border-white/5 rounded-2xl p-5 text-sm font-bold text-white focus:border-indigo-500 outline-none transition-all" value={editingChar?.age || ''} onChange={e => setEditingChar(p => ({...p!, age: e.target.value}))} />
                           </div>
                       </div>
 
-                      <div>
-                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.personality}</label>
-                          <textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[80px]" rows={3} value={editingChar?.personality || ''} onChange={e => setEditingChar(p => ({...p!, personality: e.target.value}))} />
-                      </div>
+                      <SmartTextarea label={t.personality} value={editingChar?.personality || ''} onChange={e => setEditingChar(p => ({...p!, personality: e.target.value}))} onAIRequest={async () => handleRefine(editingChar?.personality || '', 'Personality', v => setEditingChar(p => ({...p!, personality: v})))} />
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div>
-                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.speakingStyle}</label>
-                              <textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.speakingStyle || ''} onChange={e => setEditingChar(p => ({...p!, speakingStyle: e.target.value}))} />
-                          </div>
-                          <div>
-                              <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.visual}</label>
-                              <textarea className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-4 text-sm text-zinc-300 min-h-[100px]" rows={4} value={editingChar?.visualDescription || ''} onChange={e => setEditingChar(p => ({...p!, visualDescription: e.target.value}))} />
-                          </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                          <SmartTextarea label={t.speakingStyle} value={editingChar?.speakingStyle || ''} onChange={e => setEditingChar(p => ({...p!, speakingStyle: e.target.value}))} onAIRequest={async () => handleRefine(editingChar?.speakingStyle || '', 'SpeakingStyle', v => setEditingChar(p => ({...p!, speakingStyle: v})))} />
+                          <SmartTextarea label={t.visual} value={editingChar?.visualDescription || ''} onChange={e => setEditingChar(p => ({...p!, visualDescription: e.target.value}))} onAIRequest={async () => handleRefine(editingChar?.visualDescription || '', 'Visual', v => setEditingChar(p => ({...p!, visualDescription: v})))} />
                       </div>
                       
-                      {/* Memories Section */}
                       {editingChar?.memories && editingChar.memories.length > 0 && (
-                          <div className="border-t border-zinc-800 pt-6">
-                               <label className="text-xs font-bold text-indigo-400 uppercase block mb-3 flex items-center gap-2">
-                                   <BrainCircuit size={14}/> {t.memories}
+                          <div className="border-t border-white/5 pt-12">
+                               <label className="text-[10px] font-mono font-black text-indigo-400 uppercase block mb-6 flex items-center gap-3 tracking-[0.4em]">
+                                   <BrainCircuit size={16}/> {t.memories}
                                </label>
-                               <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 space-y-2 max-h-32 overflow-y-auto">
+                               <div className="bg-black/40 rounded-[32px] p-8 border border-white/5 space-y-4 max-h-56 overflow-y-auto no-scrollbar shadow-inner font-sans">
                                    {editingChar.memories.map((m, idx) => (
-                                       <div key={idx} className="text-xs text-zinc-400 flex gap-2">
-                                           <span className="text-indigo-500">•</span> {m}
+                                       <div key={idx} className="text-sm text-zinc-400 flex gap-4 leading-relaxed group">
+                                           <span className="text-indigo-500 font-mono font-black group-hover:scale-125 transition-transform">#</span> {m}
                                        </div>
                                    ))}
                                </div>
                           </div>
                       )}
-
                   </div>
               </div>
 
               {/* Footer */}
-              <div className="p-6 border-t border-zinc-800 bg-zinc-900 flex justify-end gap-4">
-                  <Button variant="secondary" onClick={() => setShowCharModal(false)}>{t.close}</Button>
-                  <Button variant="primary" onClick={handleSaveGlobalCharacter} icon={Save} className="px-8">{t.saveSettings}</Button>
+              <div className="p-10 border-t border-white/5 bg-black/20 flex justify-end gap-6 backdrop-blur-3xl">
+                  <Button variant="ghost" className="px-8 rounded-2xl" onClick={() => setShowCharModal(false)}>{t.close}</Button>
+                  <Button variant="primary" className="px-14 rounded-2xl font-display font-black text-xs" onClick={handleSaveGlobalCharacter} icon={Save}>{t.saveSettings}</Button>
               </div>
           </div>
       </div>
@@ -1215,72 +1276,85 @@ export default function App() {
       const char = globalCharacters.find(c => c.id === activeChatSession.characterId);
       
       return (
-          <div className="h-screen flex flex-col bg-zinc-950">
-              <header className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                      <Button variant="ghost" onClick={handleExitChat} icon={ChevronLeft}>{t.back}</Button>
-                      <div className="flex items-center gap-3">
+          <div className="h-screen flex flex-col bg-[#020205] font-sans">
+              <header className="bg-zinc-950/80 backdrop-blur-3xl border-b border-white/5 p-8 flex items-center justify-between z-20">
+                  <div className="flex items-center gap-8">
+                      <button onClick={handleExitChat} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all border border-white/5"><ChevronLeft /></button>
+                      <div className="flex items-center gap-5">
                           <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="md" />
                           <div>
-                              <h2 className="font-bold text-white">{char?.name}</h2>
-                              <div className="flex items-center gap-1.5 text-xs text-green-400"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> Online</div>
+                              <h2 className="font-display font-black text-2xl text-white tracking-tight leading-none mb-1">{char?.name}</h2>
+                              <div className="flex items-center gap-2.5 text-[9px] font-mono font-black uppercase text-indigo-400/70 tracking-[0.3em]">
+                                  <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse shadow-[0_0_10px_#6366f1]"></div> Soul Stream Synced
+                              </div>
                           </div>
                       </div>
                   </div>
+                  <div className="hidden md:flex px-5 py-2.5 bg-indigo-500/5 border border-indigo-500/10 rounded-full">
+                      <span className="text-[10px] font-mono font-black text-indigo-400/60 uppercase tracking-[0.2em]">Dimension Hub: Imola-Echo-7</span>
+                  </div>
               </header>
-              <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-                  {activeChatSession.messages.map(msg => (
-                      <div key={msg.id} className={`flex gap-4 max-w-3xl ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
-                          <div className={`flex-shrink-0 ${msg.role === 'user' ? 'mt-1' : ''}`}>
+
+              <main className="flex-1 overflow-y-auto p-10 md:p-16 space-y-12 no-scrollbar relative">
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+                  
+                  {activeChatSession.messages.map((msg, i) => (
+                      <div key={msg.id} className={`flex gap-8 max-w-4xl animate-fade-in ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
+                          <div className="flex-shrink-0">
                                {msg.role === 'user' ? 
-                                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white">{currentUser?.username.substring(0,2).toUpperCase()}</div> :
+                                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center font-display font-black text-white shadow-2xl ring-4 ring-indigo-600/10">{currentUser?.username.substring(0,1).toUpperCase()}</div> :
                                 <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="md" />
                                }
                           </div>
-                          <div className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-zinc-800 text-zinc-200 rounded-tl-none'}`}>
-                              {/* Text Content */}
-                              {msg.content}
-                              
-                              {/* Media Content (Image/Video) */}
-                              {msg.mediaUrl && (
-                                  <div className="mt-3 rounded-xl overflow-hidden shadow-lg border border-white/10">
-                                      {msg.mediaType === 'image' ? (
-                                          <img src={msg.mediaUrl} alt="Generated" className="w-full h-auto max-h-96 object-cover" />
-                                      ) : msg.mediaType === 'video' ? (
-                                          <div className="relative">
-                                              <video src={msg.mediaUrl} controls className="w-full h-auto max-h-96" />
-                                              <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur rounded text-[10px] text-white flex items-center gap-1">
-                                                  <Video size={10} /> AI Video
+                          <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                              <div className={`p-6 rounded-[32px] text-base leading-relaxed shadow-2xl relative border ${msg.role === 'user' ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none' : 'bg-zinc-900/50 backdrop-blur-3xl border-white/10 text-zinc-100 rounded-tl-none'}`}>
+                                  {msg.content}
+                                  {msg.mediaUrl && (
+                                      <div className="mt-5 rounded-[28px] overflow-hidden shadow-2xl border border-white/10">
+                                          {msg.mediaType === 'image' ? (
+                                              <img src={msg.mediaUrl} alt="Vision" className="w-full h-auto max-h-[600px] object-cover" />
+                                          ) : msg.mediaType === 'video' ? (
+                                              <div className="relative group">
+                                                  <video src={msg.mediaUrl} controls className="w-full h-auto max-h-[600px]" />
+                                                  <div className="absolute top-5 right-5 px-4 py-2 bg-black/80 backdrop-blur-2xl rounded-2xl text-[10px] font-mono font-black text-white flex items-center gap-3 border border-white/10 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                                                      <Video size={12} /> Fragment Captured
+                                                  </div>
                                               </div>
-                                          </div>
-                                      ) : null}
-                                  </div>
-                              )}
+                                          ) : null}
+                                      </div>
+                                  )}
+                              </div>
+                              <span className="text-[9px] font-mono font-bold text-zinc-700 uppercase tracking-widest mt-3">{new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                           </div>
                       </div>
                   ))}
                   {isChatting && (
-                       <div className="flex gap-4 max-w-3xl mr-auto animate-pulse">
+                       <div className="flex gap-8 max-w-4xl mr-auto">
                            <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="md" />
-                           <div className="bg-zinc-800 p-4 rounded-2xl rounded-tl-none text-zinc-500 flex items-center gap-1">
-                               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"></span>
-                               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce delay-75"></span>
-                               <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce delay-150"></span>
+                           <div className="bg-white/5 px-6 py-5 rounded-[32px] rounded-tl-none border border-white/5 text-zinc-600 flex items-center gap-2 backdrop-blur-xl">
+                               <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                               <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                               <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></div>
+                               <span className="text-[10px] font-mono font-black uppercase tracking-[0.3em] ml-4 opacity-40">Capturing Resonance...</span>
                            </div>
                        </div>
                   )}
-                  <div ref={companionChatEndRef} />
+                  <div ref={companionChatEndRef} className="h-20" />
               </main>
-              <footer className="p-4 bg-zinc-900 border-t border-zinc-800">
-                  <div className="max-w-4xl mx-auto flex gap-2">
-                      <input className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-all" 
-                          placeholder="Type a message..." 
-                          value={chatInput} 
-                          onChange={e => setChatInput(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleSendChatMessage()}
-                          disabled={isChatting}
-                      />
-                      <Button onClick={handleSendChatMessage} disabled={!chatInput.trim() || isChatting} icon={Send} variant="primary" className="rounded-xl"></Button>
+
+              <footer className="p-10 bg-zinc-950/80 backdrop-blur-3xl border-t border-white/5 z-20">
+                  <div className="max-w-4xl mx-auto relative group">
+                      <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-[32px] blur-xl opacity-0 group-focus-within:opacity-20 transition-all duration-500"></div>
+                      <div className="relative flex gap-4 bg-zinc-950 border border-white/10 rounded-[28px] p-2 pr-4 focus-within:border-indigo-500 transition-all shadow-2xl">
+                          <input className="flex-1 bg-transparent border-none rounded-xl px-8 py-5 text-white text-lg focus:outline-none placeholder-zinc-800 font-medium" 
+                              placeholder="Pass your consciousness echo..." 
+                              value={chatInput} 
+                              onChange={e => setChatInput(e.target.value)}
+                              onKeyDown={e => e.key === 'Enter' && handleSendChatMessage()}
+                              disabled={isChatting}
+                          />
+                          <Button onClick={handleSendChatMessage} disabled={!chatInput.trim() || isChatting} icon={Send} variant="primary" className="rounded-2xl h-16 w-16 p-0 shadow-none"></Button>
+                      </div>
                   </div>
               </footer>
           </div>
@@ -1290,106 +1364,136 @@ export default function App() {
   const renderEditor = () => {
     if (!currentScript) return null;
     return (
-      <div className="h-screen flex flex-col bg-zinc-950 animate-fade-in">
-        <header className="flex-shrink-0 border-b border-zinc-800 p-4 flex justify-between items-center bg-zinc-900 z-10">
-          <Button variant="ghost" onClick={() => setView('DASHBOARD')} icon={ChevronLeft}>{t.dashboard}</Button>
-          <div className="flex items-center gap-4 text-sm font-bold text-zinc-500">
-             <span className={`px-3 py-1 rounded-full ${editorStep === 1 ? 'bg-zinc-800 text-white' : ''}`}>1. {t.setup}</span> 
-             <span className="text-zinc-700">/</span>
-             <span className={`px-3 py-1 rounded-full ${editorStep === 2 ? 'bg-zinc-800 text-white' : ''}`}>2. {t.castSetup}</span>
+      <div className="h-screen flex flex-col bg-[#020205] animate-fade-in font-sans">
+        <header className="flex-shrink-0 border-b border-white/5 p-8 flex justify-between items-center bg-zinc-950/80 backdrop-blur-3xl z-20">
+          <button onClick={() => setView('DASHBOARD')} className="flex items-center gap-3 px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 text-xs font-display font-black text-zinc-400 hover:text-white transition-all uppercase tracking-widest border border-white/5">
+            <ChevronLeft size={16} /> Hall
+          </button>
+          <div className="flex items-center gap-10">
+             <div className={`flex flex-col items-center gap-2 transition-all duration-500 ${editorStep === 1 ? 'opacity-100' : 'opacity-30'}`}>
+                <span className="text-[9px] font-mono font-black text-indigo-400 uppercase tracking-[0.3em]">Step 01</span>
+                <span className="text-xs font-display font-bold text-white uppercase tracking-widest">{t.setup}</span>
+             </div>
+             <div className="w-12 h-[1px] bg-white/10"></div>
+             <div className={`flex flex-col items-center gap-2 transition-all duration-500 ${editorStep === 2 ? 'opacity-100' : 'opacity-30'}`}>
+                <span className="text-[9px] font-mono font-black text-indigo-400 uppercase tracking-[0.3em]">Step 02</span>
+                <span className="text-xs font-display font-bold text-white uppercase tracking-widest">{t.castSetup}</span>
+             </div>
           </div>
-          <div className="flex gap-2">
-            {editorStep === 1 ? <Button onClick={() => setEditorStep(2)} icon={ChevronRight}>{t.next}</Button> : <Button icon={Play} onClick={() => setView('STAGE')}>{t.startShow}</Button>}
+          <div className="flex gap-4">
+            {editorStep === 1 ? <Button onClick={() => setEditorStep(2)} icon={ChevronRight} className="rounded-2xl h-12 px-8 text-xs">{t.next}</Button> : <Button icon={Play} onClick={() => setView('STAGE')} className="rounded-2xl h-12 px-10 text-xs shadow-indigo-600/30 font-black">{t.startShow}</Button>}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-4xl mx-auto space-y-8">
+        <main className="flex-1 overflow-y-auto p-12 no-scrollbar">
+          <div className="max-w-5xl mx-auto space-y-16">
             {editorStep === 1 && (
-              <>
-                 <div><label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">Title</label><input className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-2xl font-bold text-white outline-none focus:border-indigo-500" value={currentScript.title} onChange={e => updateScriptState({...currentScript, title: e.target.value})} /></div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="animate-fade-in space-y-16">
+                 <div className="relative group">
+                    <label className="text-[10px] font-mono font-black text-zinc-600 uppercase tracking-[0.4em] mb-6 block">Scroll Designation</label>
+                    <input className="w-full bg-transparent border-b-2 border-white/10 rounded-none p-0 pb-6 text-6xl font-display font-black text-white outline-none focus:border-indigo-500 transition-all duration-500 placeholder-zinc-900 tracking-tight" value={currentScript.title} onChange={e => updateScriptState({...currentScript, title: e.target.value})} placeholder="Fate Unnamed..." />
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                     <SmartTextarea label={t.premise} value={currentScript.premise} onChange={e => updateScriptState({...currentScript, premise: e.target.value})} onAIRequest={async() => handleRefine(currentScript.premise, 'Premise', v => updateScriptState({...currentScript, premise: v}))} />
-                    <SmartTextarea label="Setting" value={currentScript.setting} onChange={e => updateScriptState({...currentScript, setting: e.target.value})} onAIRequest={async() => handleRefine(currentScript.setting, 'Setting', v => updateScriptState({...currentScript, setting: v}))} />
+                    <SmartTextarea label="Setting Domain" value={currentScript.setting} onChange={e => updateScriptState({...currentScript, setting: e.target.value})} onAIRequest={async() => handleRefine(currentScript.setting, 'Setting', v => updateScriptState({...currentScript, setting: v}))} />
                  </div>
                  
-                 <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4 block flex items-center gap-2">
-                        {t.plotPoints} <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 rounded-full text-[10px]">Step-by-Step</span>
+                 <div className="pt-12 border-t border-white/5">
+                    <label className="text-[10px] font-mono font-black text-indigo-400 uppercase tracking-[0.4em] mb-10 block flex items-center gap-4">
+                        <Film size={16} /> {t.plotPoints} <span className="bg-indigo-500/10 px-4 py-1.5 rounded-full text-[9px] font-mono tracking-wider">Causality Threads</span>
                     </label>
-                    <div className="grid gap-4">
+                    <div className="grid gap-8">
                         {(currentScript.plotPoints || []).map((p, i) => (
-                            <div key={i} className="group relative bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex gap-4 items-start hover:border-indigo-500/30 transition-all">
-                                <div className="bg-zinc-800 w-8 h-8 flex items-center justify-center rounded-full text-zinc-500 font-bold text-xs flex-shrink-0">
+                            <div key={i} className="group relative bg-zinc-950/40 backdrop-blur-3xl border border-white/5 p-8 rounded-[36px] flex gap-10 items-start hover:border-indigo-500/30 hover:bg-zinc-900/40 transition-all duration-500">
+                                <div className="bg-indigo-600/10 w-14 h-14 flex items-center justify-center rounded-[20px] text-indigo-400 font-display font-black text-lg flex-shrink-0 border border-indigo-500/20 shadow-inner group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
                                     {i + 1}
                                 </div>
                                 <div className="flex-1">
                                     <textarea 
-                                        className="w-full bg-transparent text-zinc-300 text-sm outline-none resize-none leading-relaxed" 
+                                        className="w-full bg-transparent text-zinc-200 text-lg font-medium outline-none resize-none leading-relaxed placeholder-zinc-800" 
                                         rows={2}
                                         value={p} 
                                         onChange={e => { const pts = [...currentScript.plotPoints]; pts[i] = e.target.value; updateScriptState({...currentScript, plotPoints: pts}); }} 
+                                        placeholder="Weave a causality event..."
                                     />
                                 </div>
-                                <button onClick={() => handleRefinePlotPoint(i)} className="opacity-0 group-hover:opacity-100 p-2 hover:bg-zinc-800 rounded text-indigo-400 transition-all" title="AI Improve">
-                                    <Sparkles size={16} />
-                                </button>
-                                <button onClick={() => { const pts = currentScript.plotPoints.filter((_, idx) => idx !== i); updateScriptState({...currentScript, plotPoints: pts}); }} className="opacity-0 group-hover:opacity-100 p-2 hover:bg-zinc-800 rounded text-red-400 transition-all">
-                                    <Trash2 size={16} />
-                                </button>
+                                <div className="flex flex-col gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                    <button onClick={() => handleRefinePlotPoint(i)} className="w-12 h-12 flex items-center justify-center bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-2xl transition-all shadow-xl" title="Align Event">
+                                        <Sparkles size={18} />
+                                    </button>
+                                    <button onClick={() => { const pts = currentScript.plotPoints.filter((_, idx) => idx !== i); updateScriptState({...currentScript, plotPoints: pts}); }} className="w-12 h-12 flex items-center justify-center bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-2xl transition-all shadow-xl">
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
                             </div>
                         ))}
-                        <button onClick={() => updateScriptState({...currentScript, plotPoints: [...currentScript.plotPoints, "New Event"]})} className="flex items-center justify-center gap-2 py-3 border border-dashed border-zinc-800 rounded-xl text-zinc-500 hover:text-white hover:border-zinc-600 transition-all">
-                            <Plus size={16} /> Add Beat
+                        <button onClick={() => updateScriptState({...currentScript, plotPoints: [...currentScript.plotPoints, "New Causality Node"]})} className="flex items-center justify-center gap-4 py-8 border-2 border-dashed border-white/5 rounded-[36px] text-zinc-700 hover:text-indigo-400 hover:border-indigo-500/30 transition-all duration-500 group font-display font-black uppercase text-[11px] tracking-[0.3em] bg-white/2">
+                            <Plus size={24} className="group-hover:scale-125 transition-transform" /> Forge New Fate Thread
                         </button>
                     </div>
                  </div>
-              </>
+              </div>
             )}
             {editorStep === 2 && (
-              <div className="space-y-6">
-                <div className="flex gap-4">
-                    <Button className="flex-1" variant="secondary" icon={Plus} onClick={() => updateScriptState({...currentScript, characters: [...currentScript.characters, { id: crypto.randomUUID(), name: "New Char", role: "Extra", personality: "Neutral", speakingStyle: "Normal", visualDescription: "...", isUserControlled: false }]})}>{t.addActor}</Button>
-                    <Button className="flex-1 bg-gradient-to-r from-emerald-900/50 to-teal-900/50 border-emerald-500/30 hover:border-emerald-500/50" icon={Sparkles} onClick={handleAiAddCharacter}>{t.aiAddActor}</Button>
+              <div className="animate-fade-in space-y-16">
+                <div className="flex gap-8">
+                    <Button className="flex-1 rounded-[32px] py-7 text-xs shadow-none border-dashed border-2 border-white/10" variant="secondary" icon={Plus} onClick={() => updateScriptState({...currentScript, characters: [...currentScript.characters, { id: crypto.randomUUID(), name: "Unknown Soul", role: "Destined", personality: "Neutral", speakingStyle: "Normal", visualDescription: "...", isUserControlled: false }]})}>{t.addActor}</Button>
+                    <Button className="flex-1 rounded-[32px] py-7 text-xs" icon={Sparkles} onClick={handleAiAddCharacter}>{t.aiAddActor}</Button>
                     {globalCharacters.length > 0 && (
-                        <div className="relative group">
-                            <Button variant="secondary" icon={Users}>{t.importActor}</Button>
-                            <div className="absolute top-full mt-2 right-0 w-48 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl hidden group-hover:block z-50">
-                                {globalCharacters.map(c => (
-                                    <div key={c.id} onClick={() => handleImportGlobalCharacter(c)} className="p-3 hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300 flex items-center gap-2">
-                                        <Avatar name={c.name} url={c.avatarUrl} size="sm" />
-                                        {c.name}
-                                    </div>
-                                ))}
+                        <div className="relative group flex-1">
+                            <Button variant="secondary" icon={Users} className="w-full rounded-[32px] py-7 text-xs">{t.importActor}</Button>
+                            <div className="absolute top-full mt-6 right-0 w-72 bg-zinc-900/90 backdrop-blur-3xl border border-white/10 rounded-[40px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] hidden group-hover:block z-50 p-3 animate-fade-in">
+                                <div className="max-h-80 overflow-y-auto no-scrollbar">
+                                    {globalCharacters.map(c => (
+                                        <div key={c.id} onClick={() => handleImportGlobalCharacter(c)} className="p-4 hover:bg-indigo-600 rounded-[24px] cursor-pointer text-sm font-display font-black text-zinc-400 hover:text-white flex items-center gap-4 transition-all duration-300">
+                                            <Avatar name={c.name} url={c.avatarUrl} size="sm" />
+                                            <span className="truncate">{c.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
                 
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-10 pb-20">
                     {(currentScript.characters || []).map((char, idx) => (
-                    <div key={char.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 flex gap-6 hover:shadow-xl transition-all">
-                        <div className="flex flex-col items-center gap-3">
-                            <Avatar name={char.name} url={char.avatarUrl} size="lg" />
-                            {!char.isGlobal && <Button size="sm" variant="secondary" onClick={() => handleGenerateAvatar(char)} className="text-xs px-2 py-1 h-8">{t.genLook}</Button>}
-                            {char.isGlobal && <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider border border-indigo-500/30 px-2 rounded-full">Linked</span>}
-                        </div>
-                        <div className="flex-1 grid grid-cols-2 gap-4">
-                        <div className="col-span-1">
-                            <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">{t.name}</label>
-                            <input className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white" disabled={!!char.isGlobal} value={char.name} onChange={e => { const chars = [...currentScript.characters]; chars[idx].name = e.target.value; updateScriptState({...currentScript, characters: chars}); }} />
-                        </div>
-                        <div className="col-span-1">
-                            <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1 block">{t.role}</label>
-                            <input className="w-full bg-zinc-950 border border-zinc-700 rounded p-2 text-sm text-white" value={char.role} onChange={e => { const chars = [...currentScript.characters]; chars[idx].role = e.target.value; updateScriptState({...currentScript, characters: chars}); }} />
-                        </div>
-                        <div className="col-span-2"><SmartTextarea label={t.personality} value={char.personality} onChange={e => { const chars = [...currentScript.characters]; chars[idx].personality = e.target.value; updateScriptState({...currentScript, characters: chars}); }} onAIRequest={async () => handleRefine(char.personality, 'Personality', v => { const chars = [...currentScript.characters]; chars[idx].personality = v; updateScriptState({...currentScript, characters: chars}); })} /></div>
-                        
-                        <div className="col-span-2 pt-2 border-t border-zinc-800 flex justify-between items-center">
-                             <div className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-zinc-800 transition-colors" onClick={() => { const chars = [...currentScript.characters]; chars[idx].isUserControlled = !chars[idx].isUserControlled; updateScriptState({...currentScript, characters: chars}); }}>
-                                <div className={`w-8 h-4 rounded-full transition-colors ${char.isUserControlled ? 'bg-indigo-600' : 'bg-zinc-600'}`}/> <span className="text-xs uppercase font-bold text-zinc-500">{t.playerControlled}</span>
+                    <div key={char.id} className="bg-zinc-900/30 backdrop-blur-2xl border border-white/5 rounded-[48px] p-10 flex flex-col md:flex-row gap-12 hover:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] transition-all duration-500">
+                        <div className="flex flex-col items-center gap-6">
+                            <div className="relative group">
+                                <Avatar name={char.name} url={char.avatarUrl} size="lg" />
+                                {!char.isGlobal && (
+                                    <div className="absolute inset-0 bg-black/60 rounded-[32px] opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-sm">
+                                         <button onClick={() => handleGenerateAvatar(char)} className="w-12 h-12 flex items-center justify-center bg-white text-black rounded-2xl shadow-2xl hover:scale-110 transition-transform"><RefreshCw size={18} /></button>
+                                    </div>
+                                )}
                             </div>
-                            <button onClick={() => { const chars = currentScript.characters.filter((_, i) => i !== idx); updateScriptState({...currentScript, characters: chars}); }} className="text-zinc-600 hover:text-red-500 p-2"><Trash2 size={16}/></button>
+                            <div className="flex flex-col gap-3 w-full">
+                                {char.isGlobal ? (
+                                    <span className="text-[8px] font-mono font-black text-indigo-400 uppercase tracking-[0.3em] border border-indigo-500/20 px-4 py-2 rounded-full text-center bg-indigo-500/5 shadow-inner">Matrix Linked</span>
+                                ) : (
+                                    <span className="text-[8px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] border border-white/5 px-4 py-2 rounded-full text-center">Fragmented</span>
+                                )}
+                                <Button size="sm" variant="ghost" onClick={() => { const chars = [...currentScript.characters]; chars[idx].isUserControlled = !chars[idx].isUserControlled; updateScriptState({...currentScript, characters: chars}); }} className={`rounded-2xl h-11 border text-[9px] font-display font-black uppercase tracking-widest ${char.isUserControlled ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl' : 'border-white/5 text-zinc-600'}`}>
+                                    {char.isUserControlled ? 'Descent On' : 'Descent Off'}
+                                </Button>
+                            </div>
                         </div>
+                        <div className="flex-1 space-y-10">
+                            <div className="grid grid-cols-2 gap-8">
+                                <div className="flex flex-col gap-3">
+                                    <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] px-1">{t.name}</label>
+                                    <input className="w-full bg-black/40 border border-white/5 rounded-2xl p-5 text-base font-display font-bold text-white focus:border-indigo-500/50 outline-none transition-all" disabled={!!char.isGlobal} value={char.name} onChange={e => { const chars = [...currentScript.characters]; chars[idx].name = e.target.value; updateScriptState({...currentScript, characters: chars}); }} />
+                                </div>
+                                <div className="flex flex-col gap-3">
+                                    <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] px-1">Destiny Path</label>
+                                    <input className="w-full bg-black/40 border border-white/5 rounded-2xl p-5 text-base font-display font-bold text-white focus:border-indigo-500/50 outline-none transition-all" value={char.role} onChange={e => { const chars = [...currentScript.characters]; chars[idx].role = e.target.value; updateScriptState({...currentScript, characters: chars}); }} />
+                                </div>
+                            </div>
+                            <SmartTextarea label="Core Pattern" value={char.personality} onChange={e => { const chars = [...currentScript.characters]; chars[idx].personality = e.target.value; updateScriptState({...currentScript, characters: chars}); }} onAIRequest={async () => handleRefine(char.personality, 'Personality', v => { const chars = [...currentScript.characters]; chars[idx].personality = v; updateScriptState({...currentScript, characters: chars}); })} />
+                            
+                            <div className="pt-8 border-t border-white/5 flex justify-end">
+                                <button onClick={() => { const chars = currentScript.characters.filter((_, i) => i !== idx); updateScriptState({...currentScript, characters: chars}); }} className="w-12 h-12 flex items-center justify-center text-zinc-700 hover:text-red-500 hover:bg-white/5 rounded-2xl transition-all"><Trash2 size={20}/></button>
+                            </div>
                         </div>
                     </div>
                     ))}
@@ -1405,87 +1509,87 @@ export default function App() {
   const renderStage = () => {
     if (!currentScript) return null;
     const userCharacters = (currentScript.characters || []).filter(c => c.isUserControlled);
-    const currentPlotIndex = currentScript.currentPlotIndex || 0;
-    const totalPlots = Math.max(1, currentScript.plotPoints.length);
-    const progress = ((currentPlotIndex + 1) / totalPlots) * 100;
     
-    const customStyles = (
-        <style>{`
-          @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-slide-up {
-            animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          }
-        `}</style>
-    );
-
     return (
-      <div className="h-screen bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-black flex flex-col overflow-hidden relative">
-        {customStyles}
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
-
-        {isReconstructing && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in">
-                <div className="relative">
-                    <div className="absolute -inset-4 bg-indigo-500/30 rounded-full blur-xl animate-pulse"></div>
-                    <Loader2 size={48} className="text-indigo-400 animate-spin relative z-10" />
-                </div>
-                <h3 className="text-white font-bold text-xl mt-6 tracking-widest uppercase">{t.reconstructing}</h3>
-                <p className="text-zinc-500 text-sm mt-2">{t.commandQueued}</p>
-            </div>
-        )}
-
-        {/* Header Overlay */}
-        <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
-             <div className="flex items-center gap-4">
-                 <Button variant="ghost" icon={ChevronLeft} onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }}>{t.exit}</Button>
-                 <div>
-                     <h2 className="text-white font-bold text-lg shadow-black drop-shadow-lg">{currentScript.title}</h2>
-                     <p className="text-zinc-400 text-xs flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div> {isPlaying ? t.onAir : t.paused}</p>
-                 </div>
-             </div>
-             <div className="flex gap-2">
-                 <Button size="sm" variant="secondary" icon={SkipForward} onClick={handleNextChapter}>{t.skipChapter}</Button>
-                 <Button size="sm" variant={isPlaying ? 'danger' : 'success'} icon={isPlaying ? Pause : Play} onClick={() => setIsPlaying(!isPlaying)}>
-                     {isPlaying ? t.paused : t.resumeAuto}
-                 </Button>
-             </div>
-        </div>
-
-        {/* Scene Background */}
-        <div className="absolute inset-0 bg-zinc-900">
+      <div className="h-screen bg-black flex flex-col overflow-hidden relative font-sans">
+        <style>{`
+          .soul-view-gradient { background: linear-gradient(to top, #000 0%, transparent 20%, transparent 80%, #000 100%); }
+          .message-entrance { animation: msgEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+          @keyframes msgEntrance { from { opacity: 0; transform: translateY(30px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        `}</style>
+        
+        {/* Cinematic Backdrop */}
+        <div className="absolute inset-0 z-0">
              {(() => {
                  const lastImg = [...currentScript.history].reverse().find(m => m.imageUrl);
                  if (lastImg && lastImg.imageUrl) {
-                     return <img src={lastImg.imageUrl} alt="Scene" className="w-full h-full object-cover opacity-50 transition-all duration-1000" />;
+                     return <img src={lastImg.imageUrl} alt="Resonance" className="w-full h-full object-cover opacity-30 transition-all duration-[3000ms] scale-105" />;
                  }
-                 return <div className="w-full h-full flex items-center justify-center text-zinc-800 font-bold text-9xl select-none opacity-20">SCENE</div>
+                 return <div className="w-full h-full bg-[#050510]"></div>
              })()}
-             <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent"></div>
+             <div className="absolute inset-0 soul-view-gradient"></div>
         </div>
 
-        {/* Script Log */}
-        <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-20 space-y-6 mask-image-linear-gradient">
+        {isReconstructing && (
+            <div className="absolute inset-0 z-[60] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center animate-fade-in">
+                <div className="relative">
+                    <div className="absolute -inset-16 bg-indigo-500/30 rounded-full blur-[80px] animate-pulse"></div>
+                    <Atom size={80} className="text-indigo-400 animate-[spin_10s_linear_infinite] relative z-10" />
+                </div>
+                <h3 className="text-white font-display font-black text-3xl mt-12 tracking-[0.5em] uppercase">Caused Reconstruction</h3>
+                <p className="text-indigo-500/50 font-mono font-bold text-[11px] uppercase tracking-[0.4em] mt-6">Aligning soul paths with the new oracle...</p>
+            </div>
+        )}
+
+        {/* HUD Overlay */}
+        <div className="absolute top-0 left-0 w-full p-10 flex justify-between items-center z-40">
+             <div className="flex items-center gap-8">
+                 <button onClick={() => { setIsPlaying(false); setView('DASHBOARD'); }} className="w-14 h-14 flex items-center justify-center rounded-[20px] bg-black/40 backdrop-blur-xl border border-white/5 text-zinc-400 hover:text-white transition-all"><ChevronLeft /></button>
+                 <div>
+                     <h2 className="text-white font-display font-black text-3xl tracking-tight leading-none text-glow">{currentScript.title}</h2>
+                     <div className="flex items-center gap-3 mt-2">
+                         <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-indigo-500 animate-pulse shadow-[0_0_10px_#6366f1]' : 'bg-zinc-700'}`}></div>
+                         <span className="text-[10px] font-mono font-black text-indigo-400/80 uppercase tracking-[0.3em]">{isPlaying ? t.onAir : t.paused}</span>
+                     </div>
+                 </div>
+             </div>
+             <div className="flex gap-5">
+                 <div className="flex bg-black/60 backdrop-blur-3xl rounded-[28px] border border-white/5 p-1.5 shadow-2xl">
+                    <button onClick={handleNextChapter} className="h-14 px-8 hover:bg-white/5 text-zinc-500 hover:text-white transition-all rounded-2xl flex items-center gap-3 text-[10px] font-mono font-black uppercase tracking-widest">
+                        <SkipForward size={16} /> {t.skipChapter}
+                    </button>
+                    <button onClick={() => setIsPlaying(!isPlaying)} className={`h-14 px-10 transition-all rounded-2xl flex items-center gap-4 text-[10px] font-mono font-black uppercase tracking-widest ${isPlaying ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'bg-white text-black hover:bg-zinc-200'}`}>
+                        {isPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
+                        {isPlaying ? 'Hold' : 'Resume'}
+                    </button>
+                 </div>
+             </div>
+        </div>
+
+        {/* Content Stream */}
+        <div className="relative z-10 flex-1 overflow-y-auto p-12 md:px-48 md:py-40 space-y-20 no-scrollbar">
              {currentScript.history.map((msg, idx) => {
                  const char = currentScript.characters.find(c => c.id === msg.characterId);
                  const isNarration = msg.type === 'narration' || msg.characterId === 'narrator';
                  const isUser = char?.isUserControlled;
                  
                  return (
-                     <div key={msg.id} className={`flex flex-col max-w-4xl mx-auto animate-slide-up ${isNarration ? 'items-center text-center my-10' : (isUser ? 'items-end' : 'items-start')}`}>
+                     <div key={msg.id} className={`flex flex-col max-w-5xl mx-auto message-entrance ${isNarration ? 'items-center text-center py-20' : (isUser ? 'items-end' : 'items-start')}`}>
                          {!isNarration && (
-                             <div className={`flex items-center gap-2 mb-1 ${isUser ? 'flex-row-reverse' : ''}`}>
-                                 <span className="text-xs font-bold text-zinc-400">{char?.name}</span>
+                             <div className={`flex items-center gap-4 mb-4 ${isUser ? 'flex-row-reverse' : ''}`}>
+                                 <Avatar name={char?.name || "?"} url={char?.avatarUrl} size="sm" />
+                                 <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+                                     <span className="text-[10px] font-mono font-black text-indigo-400/80 uppercase tracking-[0.2em]">{char?.name}</span>
+                                     <span className="text-[8px] font-mono font-bold text-zinc-700 uppercase tracking-widest">{char?.role}</span>
+                                 </div>
                              </div>
                          )}
                          
                          <div className={`
                              ${isNarration 
-                               ? 'text-zinc-300 italic text-lg md:text-xl font-serif leading-relaxed max-w-2xl text-shadow-sm' 
-                               : `p-4 rounded-2xl max-w-lg text-md shadow-lg backdrop-blur-sm border border-white/5 ${isUser ? 'bg-indigo-600/80 text-white rounded-tr-none' : 'bg-zinc-800/80 text-zinc-100 rounded-tl-none'}`}
-                         `} style={{ borderColor: !isNarration && char ? getCharacterColor(char.id) + '40' : 'transparent' }}>
+                               ? 'text-zinc-200 font-display italic text-3xl md:text-5xl font-light leading-tight max-w-4xl tracking-tight opacity-90' 
+                               : `p-8 rounded-[40px] max-w-xl text-lg shadow-2xl backdrop-blur-3xl border ${isUser ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-none' : 'bg-zinc-900/60 border-white/10 text-zinc-100 rounded-tl-none'}`}
+                         `} style={{ borderColor: !isNarration && char && !isUser ? getCharacterColor(char.id) + '60' : undefined }}>
                              {msg.content}
                          </div>
                      </div>
@@ -1493,46 +1597,51 @@ export default function App() {
              })}
              
              {turnProcessing && (
-                 <div className="flex justify-center my-8 animate-pulse">
-                     <span className="text-zinc-500 text-xs tracking-widest uppercase flex items-center gap-2">
-                         <Sparkles size={12} /> Directing...
-                     </span>
+                 <div className="flex justify-center my-16 animate-pulse">
+                     <div className="bg-white/5 border border-white/5 px-8 py-4 rounded-full flex items-center gap-4 backdrop-blur-3xl">
+                         <div className="flex items-center gap-2">
+                             <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                             <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                             <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></div>
+                         </div>
+                         <span className="text-indigo-400/60 text-[10px] font-mono font-black tracking-[0.4em] uppercase">Awaiting Soul Resonance...</span>
+                     </div>
                  </div>
              )}
-             <div ref={chatEndRef} className="h-20" />
+             <div ref={chatEndRef} className="h-40" />
         </div>
 
-        {/* Controls */}
-        <div className="relative z-20 p-6 bg-zinc-950/90 border-t border-zinc-800 backdrop-blur-xl">
-             <div className="max-w-4xl mx-auto flex flex-col gap-4">
+        {/* Global Controls */}
+        <div className="relative z-30 p-10 bg-gradient-to-t from-black via-black/90 to-transparent pt-32">
+             <div className="max-w-5xl mx-auto flex flex-col gap-8">
                  
-                 {/* God Mode Input */}
-                 <div className="flex gap-2 items-center">
-                      <div className="bg-amber-500/10 text-amber-500 p-2 rounded-lg">
-                          <Crown size={16} />
+                 {/* Director Oracle */}
+                 <div className="group relative">
+                      <div className="absolute -inset-1 bg-amber-500/20 rounded-[32px] blur-xl opacity-0 group-focus-within:opacity-100 transition-all duration-700"></div>
+                      <div className="relative flex gap-5 items-center bg-amber-500/[0.03] border border-amber-500/20 px-8 py-4 rounded-[30px] backdrop-blur-3xl focus-within:border-amber-500/50 transition-all">
+                          <Crown size={20} className="text-amber-500/40 animate-pulse" />
+                          <input 
+                             className="flex-1 bg-transparent border-none text-lg font-display font-bold text-amber-100 placeholder-amber-500/20 focus:outline-none" 
+                             placeholder="Drop an Oracle to restructure causality..."
+                             value={directorInput}
+                             onChange={e => setDirectorInput(e.target.value)}
+                             onKeyDown={e => e.key === 'Enter' && handleDirectorMessage()}
+                          />
+                          <button onClick={handleDirectorMessage} disabled={!directorInput} className="text-[10px] font-mono font-black text-amber-500 hover:text-amber-300 disabled:opacity-20 uppercase tracking-[0.4em] transition-colors">{t.inject}</button>
                       </div>
-                      <input 
-                         className="flex-1 bg-transparent border-none text-sm text-amber-200 placeholder-amber-500/30 focus:outline-none" 
-                         placeholder={t.directorPlaceholder}
-                         value={directorInput}
-                         onChange={e => setDirectorInput(e.target.value)}
-                         onKeyDown={e => e.key === 'Enter' && handleDirectorMessage()}
-                      />
-                      <button onClick={handleDirectorMessage} disabled={!directorInput} className="text-xs font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 uppercase tracking-wider">{t.inject}</button>
                  </div>
 
-                 {/* User Roleplay Inputs (if any active characters) */}
+                 {/* User Roleplay Interaction */}
                  {userCharacters.length > 0 && (
-                     <div className="grid gap-2">
+                     <div className="grid gap-6">
                          {userCharacters.map(char => (
-                             <div key={char.id} className="flex gap-2">
-                                 <div className="w-10 h-10 rounded-full flex-shrink-0 border-2 border-indigo-500 overflow-hidden">
-                                    <Avatar name={char.name} url={char.avatarUrl} size="sm" />
-                                 </div>
-                                 <div className="flex-1 flex gap-2">
+                             <div key={char.id} className="group relative flex gap-5 items-center">
+                                 <Avatar name={char.name} url={char.avatarUrl} size="md" />
+                                 <div className="flex-1 flex gap-4 relative">
+                                     <div className="absolute -inset-1 bg-indigo-500/20 rounded-[32px] blur-xl opacity-0 focus-within:opacity-30 transition-all duration-700"></div>
                                      <input 
-                                         className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 text-white focus:border-indigo-500 outline-none transition-all" 
-                                         placeholder={`${t.speakingAs} ${char.name}...`}
+                                         className="flex-1 bg-white/5 border border-white/10 rounded-[28px] px-8 py-5 text-white focus:border-indigo-500/50 outline-none transition-all shadow-2xl backdrop-blur-3xl font-medium placeholder-zinc-800" 
+                                         placeholder={`Descent as ${char.name}...`}
                                          value={userInputs[char.id] || ''}
                                          onChange={e => setUserInputs({...userInputs, [char.id]: e.target.value})}
                                          onKeyDown={async (e) => {
@@ -1544,13 +1653,13 @@ export default function App() {
                                              }
                                          }}
                                      />
-                                     <Button size="sm" icon={Send} onClick={() => {
+                                     <Button onClick={() => {
                                           const text = userInputs[char.id];
                                           if (!text) return;
                                           setUserInputs({...userInputs, [char.id]: ''});
                                           const msg: Message = { id: crypto.randomUUID(), characterId: char.id, content: text, type: 'dialogue', timestamp: Date.now() };
                                           handleUpdateScriptHistory(msg);
-                                     }} />
+                                     }} icon={Send} variant="primary" className="rounded-2xl h-16 w-16 p-0 shadow-none"></Button>
                                  </div>
                              </div>
                          ))}
@@ -1563,69 +1672,81 @@ export default function App() {
   };
 
   const renderSettings = () => (
-      <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end transition-opacity ${showSettings ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-          <div className={`w-full max-w-md bg-zinc-900 h-full shadow-2xl p-6 transform transition-transform duration-300 border-l border-zinc-800 ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
-              <div className="flex justify-between items-center mb-8">
-                  <h2 className="text-xl font-bold text-white">{t.settings}</h2>
-                  <button onClick={() => setShowSettings(false)} className="text-zinc-500 hover:text-white"><X /></button>
+      <div className={`fixed inset-0 bg-black/80 backdrop-blur-3xl z-[100] flex justify-end transition-all duration-700 ${showSettings ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`w-full max-w-md bg-[#050510] h-full shadow-[0_0_100px_rgba(0,0,0,0.9)] p-12 transform transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] border-l border-white/5 flex flex-col ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
+              <div className="flex justify-between items-center mb-16">
+                  <div className="flex items-center gap-5">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                          <Settings className="text-indigo-400" size={24} />
+                      </div>
+                      <div>
+                          <h2 className="text-2xl font-display font-black text-white tracking-tight leading-none">{t.settings}</h2>
+                          <p className="text-[9px] font-mono font-bold text-indigo-400/50 uppercase tracking-[0.3em] mt-1.5">System Calibration</p>
+                      </div>
+                  </div>
+                  <button onClick={() => setShowSettings(false)} className="w-12 h-12 flex items-center justify-center hover:bg-white/5 rounded-2xl transition-all text-zinc-500 hover:text-white border border-transparent hover:border-white/10"><X /></button>
               </div>
               
-              <div className="space-y-6">
-                  <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.provider}</label>
-                      <div className="flex bg-zinc-800 p-1 rounded-lg">
-                          <button onClick={() => setAppSettings({...appSettings, activeProvider: 'GEMINI'})} className={`flex-1 py-2 text-sm font-bold rounded ${appSettings.activeProvider !== 'OPENROUTER' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400'}`}>Gemini</button>
-                          <button onClick={() => setAppSettings({...appSettings, activeProvider: 'OPENROUTER'})} className={`flex-1 py-2 text-sm font-bold rounded ${appSettings.activeProvider === 'OPENROUTER' ? 'bg-indigo-600 text-white shadow' : 'text-zinc-400'}`}>OpenRouter</button>
+              <div className="space-y-12 flex-1 overflow-y-auto no-scrollbar pr-2">
+                  <div className="space-y-5">
+                      <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] block px-1">{t.provider}</label>
+                      <div className="flex bg-black p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                          <button onClick={() => setAppSettings({...appSettings, activeProvider: 'GEMINI'})} className={`flex-1 py-3 text-[10px] font-display font-black uppercase tracking-widest rounded-xl transition-all ${appSettings.activeProvider !== 'OPENROUTER' ? 'bg-indigo-600 text-white shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}>Gemini Core</button>
+                          <button onClick={() => setAppSettings({...appSettings, activeProvider: 'OPENROUTER'})} className={`flex-1 py-3 text-[10px] font-display font-black uppercase tracking-widest rounded-xl transition-all ${appSettings.activeProvider === 'OPENROUTER' ? 'bg-indigo-600 text-white shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}>Deep Bridge</button>
                       </div>
                   </div>
 
                   {appSettings.activeProvider === 'OPENROUTER' ? (
-                      <>
-                        <div>
-                            <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.openRouterKey}</label>
-                            <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-700 focus-within:border-indigo-500">
-                                <Key size={16} className="text-zinc-500" />
-                                <input type="password" className="bg-transparent border-none text-white w-full focus:outline-none text-sm" value={appSettings.openRouterKey || ''} onChange={e => setAppSettings({...appSettings, openRouterKey: e.target.value})} placeholder="sk-or-..." />
+                      <div className="space-y-8 animate-fade-in">
+                        <div className="flex flex-col gap-4">
+                            <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] block px-1">{t.openRouterKey}</label>
+                            <div className="flex items-center gap-4 bg-black rounded-2xl px-6 py-5 border border-white/10 focus-within:border-indigo-500/50 transition-all shadow-inner">
+                                <Key size={18} className="text-zinc-700" />
+                                <input type="password" className="bg-transparent border-none text-white w-full focus:outline-none text-sm font-medium placeholder-zinc-800" value={appSettings.openRouterKey || ''} onChange={e => setAppSettings({...appSettings, openRouterKey: e.target.value})} placeholder="sk-or-..." />
                             </div>
                         </div>
-                        <div>
-                            <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.openRouterModel}</label>
-                            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-white text-sm focus:border-indigo-500 outline-none" value={appSettings.openRouterModel || ''} onChange={e => setAppSettings({...appSettings, openRouterModel: e.target.value})} placeholder="google/gemini-2.0-flash-lite-preview-02-05:free" />
+                        <div className="flex flex-col gap-4">
+                            <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] block px-1">{t.openRouterModel}</label>
+                            <input className="w-full bg-black border border-white/10 rounded-2xl p-5 text-sm font-bold text-white focus:border-indigo-500/50 outline-none transition-all shadow-inner" value={appSettings.openRouterModel || ''} onChange={e => setAppSettings({...appSettings, openRouterModel: e.target.value})} placeholder="google/gemini-2.0-flash..." />
                         </div>
-                      </>
+                      </div>
                   ) : (
-                      <div>
-                          <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">{t.geminiKey}</label>
-                          <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2 border border-zinc-700 focus-within:border-indigo-500">
-                              <Key size={16} className="text-zinc-500" />
-                              <input type="password" className="bg-transparent border-none text-white w-full focus:outline-none text-sm" value={appSettings.apiKey || ''} onChange={e => setAppSettings({...appSettings, apiKey: e.target.value})} placeholder="AIza..." />
+                      <div className="space-y-6 animate-fade-in">
+                          <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] block px-1">{t.geminiKey}</label>
+                          <div className="flex items-center gap-4 bg-black rounded-2xl px-6 py-5 border border-white/10 focus-within:border-indigo-500/50 transition-all shadow-inner">
+                              <Key size={18} className="text-zinc-700" />
+                              <input type="password" className="bg-transparent border-none text-white w-full focus:outline-none text-sm font-medium placeholder-zinc-800" value={appSettings.apiKey || ''} onChange={e => setAppSettings({...appSettings, apiKey: e.target.value})} placeholder="AIza..." />
                           </div>
-                          <p className="text-xs text-zinc-500 mt-2">{t.apiKeyHint}</p>
+                          <p className="text-[10px] text-zinc-600 font-mono font-bold leading-relaxed opacity-60 px-1">{t.apiKeyHint}</p>
                       </div>
                   )}
 
-                  <div className="pt-6 border-t border-zinc-800">
-                       <label className="text-xs font-bold text-zinc-500 uppercase block mb-2">Language / 语言</label>
-                       <div className="flex gap-2">
-                           <button onClick={() => setLang('zh-CN')} className={`flex-1 py-2 border rounded-lg text-sm font-bold ${lang === 'zh-CN' ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'border-zinc-700 text-zinc-400'}`}>中文</button>
-                           <button onClick={() => setLang('en-US')} className={`flex-1 py-2 border rounded-lg text-sm font-bold ${lang === 'en-US' ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'border-zinc-700 text-zinc-400'}`}>English</button>
+                  <div className="pt-12 border-t border-white/5 space-y-6">
+                       <label className="text-[10px] font-mono font-black text-zinc-700 uppercase tracking-[0.3em] block px-1">Linguistic Synchro</label>
+                       <div className="flex gap-4">
+                           <button onClick={() => setLang('zh-CN')} className={`flex-1 py-4 border-2 rounded-2xl text-[10px] font-display font-black uppercase tracking-[0.2em] transition-all duration-300 ${lang === 'zh-CN' ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-xl shadow-indigo-500/10' : 'border-white/5 text-zinc-700 hover:text-zinc-500 hover:border-white/10'}`}>中文 (CN)</button>
+                           <button onClick={() => setLang('en-US')} className={`flex-1 py-4 border-2 rounded-2xl text-[10px] font-display font-black uppercase tracking-[0.2em] transition-all duration-300 ${lang === 'en-US' ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-xl shadow-indigo-500/10' : 'border-white/5 text-zinc-700 hover:text-zinc-500 hover:border-white/10'}`}>English (US)</button>
                        </div>
                   </div>
+              </div>
 
-                  <Button onClick={handleSaveSettings} className="w-full mt-4" variant="primary">{t.saveSettings}</Button>
+              <div className="mt-12 pt-12 border-t border-white/5">
+                <Button onClick={handleSaveSettings} className="w-full py-6 rounded-3xl" variant="primary">{t.saveSettings}</Button>
               </div>
           </div>
       </div>
   );
 
   return (
-    <>
+    <div className="select-none cursor-default font-sans selection:bg-indigo-500/30">
       {notification && (
-        <div className={`fixed top-4 right-4 z-[100] p-4 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in ${notification.type === 'error' ? 'bg-red-500/10 border border-red-500/20 text-red-500' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-500'}`}>
-          {notification.type === 'error' ? <AlertCircle size={20}/> : <Sparkles size={20}/>}
+        <div className={`fixed top-12 left-1/2 -translate-x-1/2 z-[200] p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex items-center gap-5 animate-fade-in backdrop-blur-3xl border ${notification.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400 shadow-indigo-500/20'}`}>
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-white/5 ${notification.type === 'error' ? 'text-red-500' : 'text-indigo-400 animate-pulse'}`}>
+            {notification.type === 'error' ? <AlertCircle size={22}/> : <Sparkles size={22}/>}
+          </div>
           <div>
-            <h4 className="font-bold text-sm">{notification.title}</h4>
-            <p className="text-xs opacity-80">{notification.msg}</p>
+            <h4 className="font-display font-black text-sm uppercase tracking-wider leading-none mb-1">{notification.title}</h4>
+            <p className="text-[10px] font-mono font-bold opacity-60 uppercase tracking-widest">{notification.msg}</p>
           </div>
         </div>
       )}
@@ -1637,6 +1758,6 @@ export default function App() {
       
       {showCharModal && renderCharacterModal()}
       {renderSettings()}
-    </>
+    </div>
   );
 }
